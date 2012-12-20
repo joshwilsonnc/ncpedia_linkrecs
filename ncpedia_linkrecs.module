@@ -1,0 +1,333 @@
+<?php
+
+// $Id$
+
+/**
+ *@file
+ * Suggests links between pages on your site
+ *  
+ * before publication, 
+ * **error handling http://drupal.org/node/672504
+ * **Way to flag as reviewed? Would that even be something you'd want?
+ * **body['und'][0]['value'] consistent? what the hell is 'und'?
+ * **needs to be more generalized: option to match between content types, fields
+ * **move some internal functions to an include file?
+ * **comments conform to standards
+ * 
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function ncpedia_linkrecs_menu() {
+  $items['admin/config/content/linkrecs'] = array(
+    'title' => 'Link suggestions',
+    'description' => 'Provides linking recommendations for edited pages.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('ncpedia_linkrecs_page'),
+    'access arguments' => array('access link suggestions page'),
+  );
+  
+  return $items;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function ncpedia_linkrecs_permission() {
+  return array(
+    'access link suggestions page' => array(
+      'title' => t('Access Linking Suggestions'),
+      'description' => t('See suggested links when editing pages.'),
+    ),
+  );
+}
+
+/**
+ * Main form-building page
+ */
+function ncpedia_linkrecs_page($form, &$form_state) {
+  
+  $form = array();
+  $requested = substr(strrchr(current_path(), "/"), 1);
+  
+  if ($requested !== 'linkrecs') {
+    $list_of_links = '<p>' . t('Suggested links to ');
+    $list_of_links .= l(ncpedia_linkrecs_get_title($requested), 'node/'.$requested, array('attributes' => array('target' => '_blank')));
+    $list_of_links .= t(" below. Review the suggestions (all links open in a new window) and select which you'd like linked, then click 'Create Links' to update.");
+    $list_of_links .= '<em>' . t('You should review all updates once they are completed.') . '</em></p>';
+    $titles = ncpedia_linkrecs_check_for_links($requested);
+    
+    if (!empty($titles)) {
+      $form['list'] = array(
+        '#type' => 'markup',
+        '#markup' => $list_of_links,
+      );
+      $form['checkboxes-toggle'] = array(
+        '#title' => t('Check/Uncheck All'), 
+        '#type' => 'checkbox',
+        '#default_value' => 0,
+      );
+      foreach($titles as $title_variation => $link_candidates) {
+        $form['links'][$title_variation] = array(
+          '#title' => t('Matches for: ' . $title_variation),
+          '#type' => 'fieldset',
+          '#collapsible' => TRUE,
+          '#collapsed' => FALSE,
+        );
+        if (isset($link_candidates['skip'])) { 
+          $form['links'][$title_variation]['skip'] = array(
+            '#type' => 'markup',
+            '#markup' => $link_candidates['skip'],
+          );
+        }
+        else {
+          foreach($link_candidates as $page) {
+            $form['links'][$title_variation][$page['nid']] = array(
+              '#title' => $page['link'],
+              '#description' => $page['context'],
+              '#type' => 'checkbox',
+              '#default_value' => 0,
+              '#states' => array(
+                'unchecked' => array (
+                  ':input[name="checkboxes-toggle"]' => array('unchecked' => TRUE),
+                ),
+              )
+            );    
+          }
+        }
+      }
+      $form['linkrecs-submit'] = array(
+        '#type' => 'submit',
+        '#value' => t('Create Links'),
+      );
+    }
+    else {
+      $options = '<p>' . t('No suggested links found.') . '</p>';
+      $options .= '<p>' . l(t('Back to ') . ncpedia_linkrecs_get_title($requested), 'node/'.$requested) . '</p>';
+      $form['information'] = array(
+        '#type' => 'markup',
+        '#markup' => $options,
+      );
+    }
+  }
+  else {
+    $form['information'] = array(
+      '#type' => 'markup',
+      '#markup' => 'Edit any page and submit to see link suggestions.',
+    );
+    $form['manual-input'] = array(
+      '#title' => t('Or: enter a node number'),
+      '#type' => 'textfield',
+      '#size' => 10,
+    );
+    $form['linkrecs-submit'] = array(
+      '#type' => 'submit',
+      '#value' => t('Get link suggestions'),
+    );
+  }
+  
+  return $form;
+}
+
+function ncpedia_linkrecs_page_submit($form, &$form_state) {
+ 
+  //when submitted as a request to view link suggestions
+  if ((isset($form['manual-input']['#value']))&&(is_numeric($form['manual-input']['#value']))) {
+    $form_state['redirect'] = 'admin/config/content/linkrecs/' . $form['manual-input']['#value'];
+  }
+  //normal suggestion form submission
+  else {
+    $link_to_node_id = $form_state['build_info']['args'][0]; 
+    foreach ($form_state['complete form']['links'] as $linked_term => $linked_term_array) {
+      if (is_array($linked_term_array)) {
+        foreach ($linked_term_array as $node_to_update => $match_array) {
+          if ((is_array($match_array)) && (isset($match_array['#value'])) && ($match_array['#value'] === 1)) {
+            //Get selected entry body from database, update, save
+            $n = node_load($node_to_update);        
+            $n->body['und'][0]['value'] = preg_replace('/(' . $linked_term . ')/i', '<a href="/node/'. $link_to_node_id .'">$1</a>', $n->body['und'][0]['value'], 1);
+            node_save($n);
+            $report_success = l($n->title, 'node/'. $n->nid, array('attributes' => array('target' => '_blank')));
+            $report_success .= t(" updated.");
+            drupal_set_message($report_success);
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_node_update()
+ * 
+ * Does a basic database scan to see if there are match candidates.
+ * If so, provides a link for detailed review.
+ */
+function ncpedia_linkrecs_node_update($node) {
+  //$title initialized as array of parsed titles - 
+  //see ncpedia_linkrecs_parse_title documentation
+  $title = ncpedia_linkrecs_parse_title($node->title);
+  $no_match_found = TRUE;
+
+  foreach ($title as $nt) {
+    if ($no_match_found) {
+      //Pull titles of matches for count & approval
+      $query = db_select('field_data_body', 'fdb');    
+      $query->join('node','n','n.nid = fdb.entity_id');
+      $query->fields('n', array('title', 'nid'))
+      ->fields('fdb', array('body_value'))
+      ->orderBy('title', 'ASC')
+      ->condition('fdb.body_value', '%'.db_like($nt).'%', 'LIKE')
+      ->addTag('node access');
+
+      $result = $query->execute();
+      if ($result->rowCount() <= 50) {
+        foreach ($result as $row) {
+          //Don't include the entry itself
+          //Don't include if already linked
+          if (($row->nid !== $node->nid) && 
+            (!preg_match("/\<a\shref=\"([A-Za-z0-9-_.:\/]+?)\"\>\s?$nt\s?\<\/a\>/i", $row->body_value))) {
+              //If any items are found, present the link for further review, where all suggested links will be
+              //available. No need to go beyond a preliminary list for this check, or even continue search 
+              //once we've found something.
+              $helpful_msg = t("Link suggestions available for "). $node->title . t(". Click to review (opens new window).");
+              drupal_set_message(l($helpful_msg, 'admin/config/content/linkrecs/' . $node->nid, array('attributes' => array('target' => '_blank'))));
+              $no_match_found = FALSE;
+              break;
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Returns a node's title when given a node id
+ * 
+ * @param integer $nid
+ * @return string
+ */
+function ncpedia_linkrecs_get_title($nid) {
+  $result = db_query('SELECT n.title FROM {node} n WHERE n.nid = :nid', array(':nid' => $nid));
+  $init_title = $result->fetchCol();
+  return $init_title[0];
+}
+
+/**
+ * Takes a string as a full title, returns array of possible titles 
+ * 
+ * @param type $title
+ */
+function ncpedia_linkrecs_parse_title($full_title) {
+  $title[] = $full_title;
+  
+  //Check for cases of node titles being lastname, firstname(s)
+  //if found, rearrange. Keep original in array, though
+  if (substr_count($title[0], ',') == 1) {
+    $title[] =  ltrim(strstr($title[0], ','), ', ') . ' ' . strstr($title[0], ',', TRUE);
+  }
+  else { 
+    //check for multi-part entries, strip "Part:" text if found
+    //no need to bother trying to match "Part:" text, original can be overwritten
+    $temp_title = preg_replace('/\s-\sPart\s[1-9]:\s/i', '***', $title[0]);
+    $title = explode('***', $temp_title);    
+  }
+  //Additionally populate array word clusters up to two words
+  //don't count clusters where all words are 3 chars or less
+  foreach ($title as $t) {
+    $all_the_words = str_word_count($t, 1);
+    for ($i=count($all_the_words)-1; $i>1; $i--) {
+      for ($j=0; $j<=count($all_the_words)-$i; $j++) {
+        $str = '';
+        $no_short_words = TRUE;
+        for ($k=0; $k<$i; $k++) {
+          if (strlen($all_the_words[$j+$k]) <= 3) {
+            $no_short_words = FALSE;
+            break;
+          }
+          else {
+            $str .= $all_the_words[$j+$k] . ' ';          
+          }
+        }
+        //skip anything with short words or common phrases
+        if (($no_short_words) && (!preg_match('/north|carolina|tar|heel|junior|historian|research|branch/i', $str))) { 
+          $title[] = rtrim($str);          
+        }
+      }
+    }
+  }
+  return $title;  
+}
+
+/**
+ * Searches database for title matches
+ * 
+ * $nid is the node in question's ID
+ * 
+ * returns link array
+ */
+function ncpedia_linkrecs_check_for_links($nid) {
+  
+  $title = ncpedia_linkrecs_parse_title(ncpedia_linkrecs_get_title($nid));  
+  
+  $links = array();
+  $context_string_length = 60; //represents number of characters on either side of the needle in the context snippet
+  
+  //keep track of all link suggestions to avoid duplication  
+  $master_list = array();
+ 
+  foreach ($title as $nt) {
+      
+    //Pull titles of matches for count & approval
+    $query = db_select('field_data_body', 'fdb');    
+    $query->join('node','n','n.nid = fdb.entity_id');
+    $query->fields('n', array('title', 'nid'))
+    ->fields('fdb', array('body_value'))
+    ->orderBy('title', 'ASC')
+    ->condition('fdb.body_value', '%'.db_like($nt).'%', 'LIKE')
+    ->addTag('node access');
+    
+    $result = $query->execute();
+    
+    if ($result->rowCount() <= 50) {
+      foreach ($result as $row) {
+        //check master list, if not there, add it and proceed
+        if (!in_array($row->nid, $master_list)) {
+          $master_list[] = $row->nid;
+          //Don't include the entry itself
+          //Don't include if already linked
+          if (($row->nid !== $nid) && 
+              (!preg_match("/\<a\shref=\"([A-Za-z0-9-_.:\/]+?)\"\>\s?$nt\s?\<\/a\>/i", $row->body_value))) {
+
+              //Get contextual text
+              $location = stripos($row->body_value, $nt);
+              //Context snippet start point should be the location of the needle minus the context length value
+              //Exception is when needle appears very close to the beginning of the haystack, in which case, just
+              //start the snippet at the beginning of the haystack.
+              $start_context = $location > $context_string_length ? $location - $context_string_length : 0;
+              //Total context snippet length should be twice the defined length value, plus the length of the needle
+              //Alter this if the needle appears to close to the end of the haystack. In that case, truncate
+              //the snippet to end at the end of the haystack.
+              $context_length = $location + strlen($nt) + $context_string_length < strlen($row->body_value) ? 
+                strlen($nt)+$context_string_length*2 : strlen($row->body_value) - $start_context;
+
+              //Set context snippet and append ellipses or appropriate notice
+              $context = strip_tags(substr($row->body_value, $start_context, $context_length));
+              $context = $start_context !== 0 ? '...' . $context : '[START OF BODY]' . $context;
+              $context = $context_length > $context_string_length * 2 ? $context . '...' : $context . '[END OF BODY]';   
+
+              //Add nid, link, and context to return array
+              $links[$nt][$row->title]['nid'] = $row->nid;
+              $links[$nt][$row->title]['link'] = l($row->title, "node/" . $row->nid, array('attributes' => array('target' => '_blank')));
+              $links[$nt][$row->title]['context'] = $context;
+          }
+        }
+      }
+    }
+    else {
+      $links[$nt]['skip'] = '<strong>' . t('Skipped: more than 50 possible matches.') . '</strong>';
+    }
+  }
+
+  return $links;
+}
