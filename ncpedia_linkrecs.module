@@ -228,7 +228,7 @@ function ncpedia_linkrecs_node_update($node) {
         }
       }
       else {
-        drupal_set_message("Link suggestions found for $nt, but ignored. (Number found exceeds maximum.)");
+        drupal_set_message($result->rowCount() . " link suggestions found for $nt, but ignored. (Number found exceeds maximum of $max_links_suggested.)");
       }
     }
   }
