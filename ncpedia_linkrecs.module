@@ -165,6 +165,9 @@ function ncpedia_linkrecs_page_submit($form, &$form_state) {
  * If so, provides a link for detailed review.
  */
 function ncpedia_linkrecs_node_update($node) {
+  
+  $max_links_suggested = 50;
+  
   //$title initialized as array of parsed titles - 
   //see ncpedia_linkrecs_parse_title documentation
   $title = ncpedia_linkrecs_parse_title($node->title);
@@ -182,7 +185,7 @@ function ncpedia_linkrecs_node_update($node) {
       ->addTag('node access');
 
       $result = $query->execute();
-      if ($result->rowCount() <= 50) {
+      if ($result->rowCount() <= $max_links_suggested) {
         foreach ($result as $row) {
           //Don't include the entry itself
           //Don't include if already linked
