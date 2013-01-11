@@ -23,10 +23,14 @@
 function ncpedia_linkrecs_init() {
 
   // Grab the maximum number of link suggestions allowed from a variable, or set default
-  $max = variable_get('ncpedia_linkrecs_max', 50);
-
+  $max_suggestions = variable_get('ncpedia_linkrecs_max', 50);
   // Save the max as a variable
-  variable_set('ncpedia_linkrecs_max', $max);
+  variable_set('ncpedia_linkrecs_max', $max_suggestions);
+  
+  // Grab the maximum number of link suggestions allowed from a variable, or set default
+  $context_length = variable_get('ncpedia_linkrecs_context_length', 60);
+  // Save the max as a variable
+  variable_set('ncpedia_linkrecs_context_length', $context_length);
 }
 
 /**
@@ -302,12 +306,12 @@ function ncpedia_linkrecs_parse_title($full_title) {
 function ncpedia_linkrecs_check_for_links($nid) {
   
   $max_links_suggested = variable_get('ncpedia_linkrecs_max', 50);
+  $context_string_length = variable_get('ncpedia_linkrecs_context_length', 60);
   
   $title = ncpedia_linkrecs_parse_title(ncpedia_linkrecs_get_title($nid));  
   
   $links = array();
-  $context_string_length = 60; //represents number of characters on either side of the needle in the context snippet
-  
+    
   //keep track of all link suggestions to avoid duplication  
   $master_list = array();
  
