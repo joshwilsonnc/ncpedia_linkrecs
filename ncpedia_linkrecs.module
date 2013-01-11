@@ -301,6 +301,8 @@ function ncpedia_linkrecs_parse_title($full_title) {
  */
 function ncpedia_linkrecs_check_for_links($nid) {
   
+  $max_links_suggested = variable_get('ncpedia_linkrecs_max', 50);
+  
   $title = ncpedia_linkrecs_parse_title(ncpedia_linkrecs_get_title($nid));  
   
   $links = array();
@@ -322,7 +324,7 @@ function ncpedia_linkrecs_check_for_links($nid) {
     
     $result = $query->execute();
     
-    if ($result->rowCount() <= 50) {
+    if ($result->rowCount() <= $max_links_suggested) {
       foreach ($result as $row) {
         //check master list, if not there, add it and proceed
         if (!in_array($row->nid, $master_list)) {
@@ -358,7 +360,7 @@ function ncpedia_linkrecs_check_for_links($nid) {
       }
     }
     else {
-      $links[$nt]['skip'] = '<strong>' . t('Skipped: more than 50 possible matches.') . '</strong>';
+      $links[$nt]['skip'] = '<strong>' . t("Skipped. ") . $result->rowCount() . t(" link suggestions found for $nt, exceeding maximum of ") . $max_links_suggested . '</strong>';
     }
   }
 
