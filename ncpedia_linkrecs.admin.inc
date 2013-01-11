@@ -9,7 +9,7 @@
 /**
  * Builds and returns the link recommender settings form.
  */
-function ncpediaLinkrecs_admin_settings() {
+function ncpedia_linkrecs_admin_settings() {
   
   $form = array();
   $form['ncpedia_linkrecs_max'] = array(
