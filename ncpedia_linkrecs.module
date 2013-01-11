@@ -192,7 +192,7 @@ function ncpedia_linkrecs_page_submit($form, &$form_state) {
  */
 function ncpedia_linkrecs_node_update($node) {
   
-  $max_links_suggested = 50;
+  $max_links_suggested = variable_get('ncpedia_linkrecs_max', 50);
   
   //$title initialized as array of parsed titles - 
   //see ncpedia_linkrecs_parse_title documentation
