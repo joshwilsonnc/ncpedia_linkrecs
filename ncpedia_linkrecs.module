@@ -18,6 +18,18 @@
  */
 
 /**
+ * Implements hook_init()
+ */
+function ncpedia_linkrecs_init() {
+
+  // Grab the maximum number of link suggestions allowed from a variable, or set default
+  $max = variable_get('ncpedia_linkrecs_max', 50);
+
+  // Save the max as a variable
+  variable_set('ncpedia_linkrecs_max', $max);
+}
+
+/**
  * Implements hook_menu().
  */
 function ncpedia_linkrecs_menu() {
@@ -29,6 +41,16 @@ function ncpedia_linkrecs_menu() {
     'access arguments' => array('access link suggestions page'),
   );
   
+  $items['admin/config/content/linkrecs/settings'] = array(
+    'title' => 'Link recommender settings',
+    'description' => 'link recommender configuration',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('ncpedia_linkrecs_admin_settings'),
+    'access arguments' => array('administer link recommender'),
+    'file' => 'ncpedia_linkrecs.admin.inc',
+    'file path' => drupal_get_path('module', 'ncpedia_linkrecs'),
+  );
+  
   return $items;
 }
 
@@ -37,6 +59,10 @@ function ncpedia_linkrecs_menu() {
  */
 function ncpedia_linkrecs_permission() {
   return array(
+    'administer link recommender' => array(
+      'title' => t('Administer link suggestions module'),
+      'description' => t('Perform administration tasks for link suggestions module.'),
+    ),
     'access link suggestions page' => array(
       'title' => t('Access Linking Suggestions'),
       'description' => t('See suggested links when editing pages.'),
@@ -200,6 +226,9 @@ function ncpedia_linkrecs_node_update($node) {
               break;
           }
         }
+      }
+      else {
+        drupal_set_message("Link suggestions found for $nt, but ignored. (Number found exceeds maximum.)");
       }
     }
   }
