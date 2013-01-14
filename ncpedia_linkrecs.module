@@ -338,6 +338,8 @@ function ncpedia_linkrecs_check_for_links($nid) {
   $title = ncpedia_linkrecs_parse_title(ncpedia_linkrecs_get_title($nid));  
   
   $links = array();
+  
+  $existing_link_checks = array();
     
   //keep track of all link suggestions to avoid duplication  
   $master_list = array();
@@ -362,11 +364,21 @@ function ncpedia_linkrecs_check_for_links($nid) {
           $master_list[] = $row->nid;
           //Don't include the entry itself
           //Don't include if already linked
-          if (($row->nid !== $nid) && 
-              (!preg_match("/\<a\shref=\"([A-Za-z0-9-_.:\/]+?)\"\>\s?$nt\s?\<\/a\>/is", $row->body_value))) {
+          if ($row->nid !== $nid) {
 
+            //set body value, stripping image tags from original - we don't want to consider
+            //text present in alt/title image attributes
+            $body = preg_replace("/\<img.+?$nt.+?\/\>/is", ' IMG_REMOVED ', $row->body_value);
+            
+            //flags for link detection
+            //existing_link_checks[0] = internal links?
+            //existing_link_checks[1] = external links?
+            $existing_link_checks = ncpedia_linkrecs_find_links($nt, $body);
+           
+            //if there are no internally-linked matches, we can proceed with recommend a link
+            if (!$existing_link_checks[0]) {           
               //Get contextual text
-              $location = stripos($row->body_value, $nt);
+              $location = stripos($body, $nt);
               //Context snippet start point should be the location of the needle minus the context length value
               //Exception is when needle appears very close to the beginning of the haystack, in which case, just
               //start the snippet at the beginning of the haystack.
@@ -374,18 +386,20 @@ function ncpedia_linkrecs_check_for_links($nid) {
               //Total context snippet length should be twice the defined length value, plus the length of the needle
               //Alter this if the needle appears to close to the end of the haystack. In that case, truncate
               //the snippet to end at the end of the haystack.
-              $context_length = $location + strlen($nt) + $context_string_length < strlen($row->body_value) ? 
-                strlen($nt)+$context_string_length*2 : strlen($row->body_value) - $start_context;
+              $context_length = $location + strlen($nt) + $context_string_length < strlen($body) ? 
+                strlen($nt)+$context_string_length*2 : strlen($body) - $start_context;
 
               //Set context snippet and append ellipses or appropriate notice
-              $context = strip_tags(substr($row->body_value, $start_context, $context_length));
+              $context = strip_tags(substr($body, $start_context, $context_length));
               $context = $start_context !== 0 ? '...' . $context : '[START OF BODY]' . $context;
               $context = $context_length > $context_string_length * 2 ? $context . '...' : $context . '[END OF BODY]';   
 
               //Add nid, link, and context to return array
+              //If text is externally linked, note that in context string
               $links[$nt][$row->title]['nid'] = $row->nid;
               $links[$nt][$row->title]['link'] = l($row->title, "node/" . $row->nid, array('attributes' => array('target' => '_blank')));
-              $links[$nt][$row->title]['context'] = $context;
+              $links[$nt][$row->title]['context'] = $existing_link_checks[1] ? 'EXTERNAL LINK SET: ' . $context : $context;
+            }
           }
         }
       }
@@ -396,4 +410,24 @@ function ncpedia_linkrecs_check_for_links($nid) {
   }
 
   return $links;
+}
+
+function ncpedia_linkrecs_find_links($nt, $body) {
+
+  //flags for link detection
+  $internal_link_detected = FALSE;
+  $external_link_detected = FALSE;
+  if (preg_match_all('/\<a\shref=\"(.+?)\"\>(.+?)\<\/a\>/is', $body, $matches)) {
+    for ($i=0; $i<count($matches[0]); $i++) {
+      if (preg_match("/$nt/is", $matches[2][$i])) {
+        if (preg_match('/^\//is', $matches[1][$i])) {
+          $internal_link_detected = TRUE;
+        }
+        else {
+          $external_link_detected = TRUE;
+        }
+      }
+    }
+  }
+  return array($internal_link_detected, $external_link_detected);
 }
