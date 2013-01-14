@@ -338,9 +338,7 @@ function ncpedia_linkrecs_check_for_links($nid) {
   $title = ncpedia_linkrecs_parse_title(ncpedia_linkrecs_get_title($nid));  
   
   $links = array();
-  
-  $existing_link_checks = array();
-    
+      
   //keep track of all link suggestions to avoid duplication  
   $master_list = array();
  
@@ -368,7 +366,7 @@ function ncpedia_linkrecs_check_for_links($nid) {
 
             //set body value, stripping image tags from original - we don't want to consider
             //text present in alt/title image attributes
-            $body = preg_replace("/\<img.+?$nt.+?\/\>/is", ' IMG_REMOVED ', $row->body_value);
+            $body = preg_replace('/\<img.+?\/\>/is', ' IMG_REMOVED ', $row->body_value);
             
             //flags for link detection
             //existing_link_checks[0] = internal links?
@@ -398,7 +396,7 @@ function ncpedia_linkrecs_check_for_links($nid) {
               //If text is externally linked, note that in context string
               $links[$nt][$row->title]['nid'] = $row->nid;
               $links[$nt][$row->title]['link'] = l($row->title, "node/" . $row->nid, array('attributes' => array('target' => '_blank')));
-              $links[$nt][$row->title]['context'] = $existing_link_checks[1] ? 'EXTERNAL LINK SET: ' . $context : $context;
+              $links[$nt][$row->title]['context'] = $existing_link_checks[1] ? 'EXTERNAL LINK FOUND: ' . $context : $context;
             }
           }
         }
