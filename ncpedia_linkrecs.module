@@ -217,17 +217,27 @@ function ncpedia_linkrecs_node_update($node) {
       $result = $query->execute();
       if ($result->rowCount() <= $max_links_suggested) {
         foreach ($result as $row) {
-          //Don't include the entry itself
-          //Don't include if already linked
-          if (($row->nid !== $node->nid) && 
-            (!preg_match("/\<a\shref=\"([A-Za-z0-9-_.:\/]+?)\"\>\s?$nt\s?\<\/a\>/i", $row->body_value))) {
-              //If any items are found, present the link for further review, where all suggested links will be
-              //available. No need to go beyond a preliminary list for this check, or even continue search 
-              //once we've found something.
-              $helpful_msg = t("Link suggestions available for "). $node->title . t(". Click to review (opens new window).");
-              drupal_set_message(l($helpful_msg, 'admin/config/content/linkrecs/' . $node->nid, array('attributes' => array('target' => '_blank'))));
-              $no_match_found = FALSE;
-              break;
+          
+          //set body value, stripping image tags from original - we don't want to consider
+          //text present in alt/title image attributes
+          $body = preg_replace('/\<img.+?\/\>/is', ' IMG_REMOVED ', $row->body_value);
+
+          //flags for link detection
+          //existing_link_checks[0] = internal links?
+          //existing_link_checks[1] = external links?
+          $existing_link_checks = ncpedia_linkrecs_review_links($nt, $body);
+          
+          //Proceed with creating a link and contextual text, skipping:
+          // * the entry itself (same nid)
+          // * articles that already have a matching internal link
+          if (($row->nid !== $node->nid) && (!$existing_link_checks[0])) {
+            //If any items are found, present the link for further review, where all suggested links will be
+            //available. No need to go beyond a preliminary list for this check, or even continue search 
+            //once we've found something.
+            $helpful_msg = t("Link suggestions available for "). $node->title . t(". Click to review (opens new window).");
+            drupal_set_message(l($helpful_msg, 'admin/config/content/linkrecs/' . $node->nid, array('attributes' => array('target' => '_blank'))));
+            $no_match_found = FALSE;
+            break;
           }
         }
       }
@@ -376,14 +386,16 @@ function ncpedia_linkrecs_check_for_links($nid) {
           // * articles that already have a matching internal link
           if (($row->nid !== $nid) && (!$existing_link_checks[0])) {
             
-            //Get contextual text
+            //Find the first match. This is generally the only link we'd add.
             $location = stripos($body, $nt);
-            //Context snippet start point should be the location of the needle minus the context length value
-            //Exception is when needle appears very close to the beginning of the haystack, in which case, just
+            //Context snippet start point should be the location of the needle minus the 
+            //context length value. Exception is when needle appears very close to the 
+            //beginning of the haystack, in which case, just
             //start the snippet at the beginning of the haystack.
             $start_context = $location > $context_string_length ? $location - $context_string_length : 0;
-            //Total context snippet length should be twice the defined length value, plus the length of the needle
-            //Alter this if the needle appears to close to the end of the haystack. In that case, truncate
+            //Total context snippet length should be twice the defined length value, plus 
+            //the length of the needle. Alter this if the needle appears to close to the 
+            //end of the haystack. In that case, truncate
             //the snippet to end at the end of the haystack.
             $context_length = $location + strlen($nt) + $context_string_length < strlen($body) ? 
               strlen($nt)+$context_string_length*2 : strlen($body) - $start_context;
