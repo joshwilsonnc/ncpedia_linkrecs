@@ -259,8 +259,16 @@ function ncpedia_linkrecs_parse_title($full_title) {
   
   //Running list of strings to ignore, keep as a regex
   $verboten_list = '/north|carolina|tar|heel|junior|historian|research|branch/i';
+
+  //Title strings that should be removed
+  $title_removes_list = array (
+    ' (from Tar Heel Junior Historian)',
+  );
+  $title_replacements_list = array (
+    '',
+  );
   
-  $title[] = $full_title;
+  $title[] = str_replace($title_removes_list, $title_replacements_list, $full_title);
 
   //Check for cases of node titles being lastname, firstname(s)
   //if found, rearrange. Keep original in array, though
@@ -355,7 +363,7 @@ function ncpedia_linkrecs_check_for_links($nid) {
           //Don't include the entry itself
           //Don't include if already linked
           if (($row->nid !== $nid) && 
-              (!preg_match("/\<a\shref=\"([A-Za-z0-9-_.:\/]+?)\"\>\s?$nt\s?\<\/a\>/i", $row->body_value))) {
+              (!preg_match("/\<a\shref=\"([A-Za-z0-9-_.:\/]+?)\"\>\s?$nt\s?\<\/a\>/is", $row->body_value))) {
 
               //Get contextual text
               $location = stripos($row->body_value, $nt);
