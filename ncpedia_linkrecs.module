@@ -359,45 +359,45 @@ function ncpedia_linkrecs_check_for_links($nid) {
       foreach ($result as $row) {
         //check master list, if not there, add it and proceed
         if (!in_array($row->nid, $master_list)) {
+          
           $master_list[] = $row->nid;
-          //Don't include the entry itself
-          //Don't include if already linked
-          if ($row->nid !== $nid) {
+          
+          //set body value, stripping image tags from original - we don't want to consider
+          //text present in alt/title image attributes
+          $body = preg_replace('/\<img.+?\/\>/is', ' IMG_REMOVED ', $row->body_value);
 
-            //set body value, stripping image tags from original - we don't want to consider
-            //text present in alt/title image attributes
-            $body = preg_replace('/\<img.+?\/\>/is', ' IMG_REMOVED ', $row->body_value);
+          //flags for link detection
+          //existing_link_checks[0] = internal links?
+          //existing_link_checks[1] = external links?
+          $existing_link_checks = ncpedia_linkrecs_review_links($nt, $body);
+          
+          //Proceed with creating a link and contextual text, skipping:
+          // * the entry itself (same nid)
+          // * articles that already have a matching internal link
+          if (($row->nid !== $nid) && (!$existing_link_checks[0])) {
             
-            //flags for link detection
-            //existing_link_checks[0] = internal links?
-            //existing_link_checks[1] = external links?
-            $existing_link_checks = ncpedia_linkrecs_find_links($nt, $body);
-           
-            //if there are no internally-linked matches, we can proceed with recommend a link
-            if (!$existing_link_checks[0]) {           
-              //Get contextual text
-              $location = stripos($body, $nt);
-              //Context snippet start point should be the location of the needle minus the context length value
-              //Exception is when needle appears very close to the beginning of the haystack, in which case, just
-              //start the snippet at the beginning of the haystack.
-              $start_context = $location > $context_string_length ? $location - $context_string_length : 0;
-              //Total context snippet length should be twice the defined length value, plus the length of the needle
-              //Alter this if the needle appears to close to the end of the haystack. In that case, truncate
-              //the snippet to end at the end of the haystack.
-              $context_length = $location + strlen($nt) + $context_string_length < strlen($body) ? 
-                strlen($nt)+$context_string_length*2 : strlen($body) - $start_context;
+            //Get contextual text
+            $location = stripos($body, $nt);
+            //Context snippet start point should be the location of the needle minus the context length value
+            //Exception is when needle appears very close to the beginning of the haystack, in which case, just
+            //start the snippet at the beginning of the haystack.
+            $start_context = $location > $context_string_length ? $location - $context_string_length : 0;
+            //Total context snippet length should be twice the defined length value, plus the length of the needle
+            //Alter this if the needle appears to close to the end of the haystack. In that case, truncate
+            //the snippet to end at the end of the haystack.
+            $context_length = $location + strlen($nt) + $context_string_length < strlen($body) ? 
+              strlen($nt)+$context_string_length*2 : strlen($body) - $start_context;
 
-              //Set context snippet and append ellipses or appropriate notice
-              $context = strip_tags(substr($body, $start_context, $context_length));
-              $context = $start_context !== 0 ? '...' . $context : '[START OF BODY]' . $context;
-              $context = $context_length > $context_string_length * 2 ? $context . '...' : $context . '[END OF BODY]';   
+            //Set context snippet and append ellipses or appropriate notice
+            $context = strip_tags(substr($body, $start_context, $context_length));
+            $context = $start_context !== 0 ? '...' . $context : '[START OF BODY]' . $context;
+            $context = $context_length > $context_string_length * 2 ? $context . '...' : $context . '[END OF BODY]';   
 
-              //Add nid, link, and context to return array
-              //If text is externally linked, note that in context string
-              $links[$nt][$row->title]['nid'] = $row->nid;
-              $links[$nt][$row->title]['link'] = l($row->title, "node/" . $row->nid, array('attributes' => array('target' => '_blank')));
-              $links[$nt][$row->title]['context'] = $existing_link_checks[1] ? 'EXTERNAL LINK FOUND: ' . $context : $context;
-            }
+            //Add nid, link, and context to return array
+            //If text is externally linked, note that in context string
+            $links[$nt][$row->title]['nid'] = $row->nid;
+            $links[$nt][$row->title]['link'] = l($row->title, "node/" . $row->nid, array('attributes' => array('target' => '_blank')));
+            $links[$nt][$row->title]['context'] = $existing_link_checks[1] ? 'EXTERNAL LINK FOUND: ' . $context : $context;
           }
         }
       }
@@ -410,7 +410,7 @@ function ncpedia_linkrecs_check_for_links($nid) {
   return $links;
 }
 
-function ncpedia_linkrecs_find_links($nt, $body) {
+function ncpedia_linkrecs_review_links($nt, $body) {
 
   //flags for link detection
   $internal_link_detected = FALSE;
