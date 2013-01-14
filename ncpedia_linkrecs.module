@@ -256,18 +256,33 @@ function ncpedia_linkrecs_get_title($nid) {
  * @param type $title
  */
 function ncpedia_linkrecs_parse_title($full_title) {
-  $title[] = $full_title;
   
+  $title[] = $full_title;
+
   //Check for cases of node titles being lastname, firstname(s)
   //if found, rearrange. Keep original in array, though
-  if (substr_count($title[0], ',') == 1) {
+  if (substr_count($title[0], ',') > 1) {
+    $variations = preg_split('/,\s*/i', $title[0]);
+    $title[] = $variations[0] . ', ' . $variations[1];
+    $title[] = $variations[1] . ' ' . $variations[0];
+    $title[] = $variations[1] . ' ' . $variations[0] . ', ' . $variations[2];
+  }  
+  elseif (substr_count($title[0], ',') === 1) {
     $title[] =  ltrim(strstr($title[0], ','), ', ') . ' ' . strstr($title[0], ',', TRUE);
   }
   else { 
+    //inferring it's not a name, do a few other small things:
+
+    //de-pluralize - can't reliably do this but at least try a simple -s removal
+    if (preg_match('/s\Z/i', $title[0])) {
+      $title[] = substr($full_title, 0, strlen($full_title)-1);
+    }  
     //check for multi-part entries, strip "Part:" text if found
     //no need to bother trying to match "Part:" text, original can be overwritten
-    $temp_title = preg_replace('/\s-\sPart\s[1-9]:\s/i', '***', $title[0]);
-    $title = explode('***', $temp_title);    
+    if (preg_match('/\s-\sPart\s[1-9]:\s/i', $title[0])) {
+      $temp_title = preg_replace('/\s-\sPart\s[1-9]:\s/i', '***', $title[0]);
+      $title = explode('***', $temp_title);    
+    }
   }
   //Additionally populate array word clusters up to two words
   //don't count clusters where all words are 3 chars or less
@@ -287,8 +302,9 @@ function ncpedia_linkrecs_parse_title($full_title) {
           }
         }
         //skip anything with short words or common phrases
-        if (($no_short_words) && (!preg_match('/north|carolina|tar|heel|junior|historian|research|branch/i', $str))) { 
-          $title[] = rtrim($str);          
+        $str = rtrim($str);
+        if (($no_short_words) && (!preg_match($verboten_list, $str)) && (!in_array($str, $title))) { 
+          $title[] = $str;
         }
       }
     }
