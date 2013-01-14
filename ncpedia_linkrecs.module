@@ -257,6 +257,9 @@ function ncpedia_linkrecs_get_title($nid) {
  */
 function ncpedia_linkrecs_parse_title($full_title) {
   
+  //Running list of strings to ignore, keep as a regex
+  $verboten_list = '/north|carolina|tar|heel|junior|historian|research|branch/i';
+  
   $title[] = $full_title;
 
   //Check for cases of node titles being lastname, firstname(s)
