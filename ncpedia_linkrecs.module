@@ -433,27 +433,21 @@ function ncpedia_linkrecs_check_for_links($nid) {
 function ncpedia_linkrecs_review_links($nt, $body) {
 
   //flags for link detection
-  $updated_body = '';
   $internal_link_detected = FALSE;
   $external_link_detected = FALSE;
   if (preg_match_all('/\<a\shref=\"(.+?)\"\>(.+?)\<\/a\>/is', $body, $matches)) {
-    if ($update_link) {
-      $updated_body = str_replace($matches[0][2], '<a href="' . $update_string . '">' . $matches[2][2] . '</a>', $body);
-    }
-    else {
-      for ($i=0; $i<count($matches[0]); $i++) {
-        if (preg_match("/$nt/is", $matches[2][$i])) {
-          if (preg_match('/^\//is', $matches[1][$i])) {
-            $internal_link_detected = TRUE;
-          }
-          else {
-            $external_link_detected = TRUE;
-          }
+    for ($i=0; $i<count($matches[0]); $i++) {
+      if (preg_match("/$nt/is", $matches[2][$i])) {
+        if (preg_match('/^\//is', $matches[1][$i])) {
+          $internal_link_detected = TRUE;
+        }
+        else {
+          $external_link_detected = TRUE;
         }
       }
     }
   }
-  return array($internal_link_detected, $external_link_detected, $updated_body);
+  return array($internal_link_detected, $external_link_detected);
 }
 
 /**
