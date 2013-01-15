@@ -85,10 +85,12 @@ function ncpedia_linkrecs_page($form, &$form_state) {
   if ($requested !== 'linkrecs') {
     $list_of_links = '<p>' . t('Suggested links to ');
     $list_of_links .= l(ncpedia_linkrecs_get_title($requested), 'node/'.$requested, array('attributes' => array('target' => '_blank')));
-    $list_of_links .= t(" below. Review the suggestions (all links open in a new window) and select which you'd like linked, then click 'Create Links' to update.");
+    $list_of_links .= t(" below. Review the suggestions (all links open in a new window) and 
+      select which you'd like linked, then click 'Create Links' to update. External links
+      are replaced.");
     $list_of_links .= '<em>' . t('You should review all updates once they are completed.') . '</em></p>';
     $titles = ncpedia_linkrecs_check_for_links($requested);
-    
+  
     if (!empty($titles)) {
       $form['list'] = array(
         '#type' => 'markup',
@@ -117,6 +119,7 @@ function ncpedia_linkrecs_page($form, &$form_state) {
             $form['links'][$title_variation][$page['nid']] = array(
               '#title' => $page['link'],
               '#description' => $page['context'],
+              '#link_type' => $page['link-type'],
               '#type' => 'checkbox',
               '#default_value' => 0,
               '#states' => array(
@@ -175,8 +178,8 @@ function ncpedia_linkrecs_page_submit($form, &$form_state) {
         foreach ($linked_term_array as $node_to_update => $match_array) {
           if ((is_array($match_array)) && (isset($match_array['#value'])) && ($match_array['#value'] === 1)) {
             //Get selected entry body from database, update, save
-            $n = node_load($node_to_update);        
-            $n->body['und'][0]['value'] = preg_replace('/(' . $linked_term . ')/i', '<a href="/node/'. $link_to_node_id .'">$1</a>', $n->body['und'][0]['value'], 1);
+            $n = node_load($node_to_update); 
+            $n->body['und'][0]['value'] = ncpedia_linkrecs_update_links($linked_term, $link_to_node_id, $n->body['und'][0]['value'], $match_array['#link_type']);
             node_save($n);
             $report_success = l($n->title, 'node/'. $n->nid, array('attributes' => array('target' => '_blank')));
             $report_success .= t(" updated.");
@@ -405,11 +408,16 @@ function ncpedia_linkrecs_check_for_links($nid) {
             $context = $start_context !== 0 ? '...' . $context : '[START OF BODY]' . $context;
             $context = $context_length > $context_string_length * 2 ? $context . '...' : $context . '[END OF BODY]';   
 
-            //Add nid, link, and context to return array
-            //If text is externally linked, note that in context string
             $links[$nt][$row->title]['nid'] = $row->nid;
             $links[$nt][$row->title]['link'] = l($row->title, "node/" . $row->nid, array('attributes' => array('target' => '_blank')));
-            $links[$nt][$row->title]['context'] = $existing_link_checks[1] ? 'EXTERNAL LINK FOUND: ' . $context : $context;
+            if ($existing_link_checks[1]) {
+              $links[$nt][$row->title]['context'] = 'EXTERNAL LINK FOUND. UPDATING WILL REPLACE: ' . $context;            
+              $links[$nt][$row->title]['link-type'] = 'external';
+            }
+            else {
+              $links[$nt][$row->title]['context'] = $context;
+              $links[$nt][$row->title]['link-type'] = 'internal';
+            }
           }
         }
       }
@@ -452,19 +460,29 @@ function ncpedia_linkrecs_review_links($nt, $body) {
 
 /**
  * 
- * @param type $nt
- * @param type $body
- * @param type $update_path
+ * @param string $nt The title string
+ * @param string $update_path The node ID to link to
+ * @param string $body
+ * @param string $link_type 'external' or 'internal' considered; assumed 'internal' unless specified
  * @return type
  */
-function ncpedia_linkrecs_update_links ($nt, $body, $update_path) {
+function ncpedia_linkrecs_update_links ($nt, $update_path, $body, $link_type) {
+
   $updated_body = '';
-  if (preg_match_all('/\<a\shref=\"(.+?)\"\>(.+?)\<\/a\>/is', $body, $matches)) {
-    for ($i=0; $i<count($matches[0]); $i++) {
-      if ($matches[2][$i] == $nt) {
-        $updated_body = str_replace($matches[0][$i], '<a href="/node/' . $update_string . '">' . $matches[2][$i] . '</a>', $body);        
+  
+  if ($link_type === 'external') {
+    if (preg_match_all('/\<a\shref=\"(.+?)\"\>(.+?)\<\/a\>/is', $body, $matches)) {
+      for ($i=0; $i<count($matches[0]); $i++) {
+        if ($matches[2][$i] == $nt) {
+          $updated_body = str_replace($matches[0][$i], '<a href="/node/' . $update_path . '">' . $matches[2][$i] . '</a>', $body);        
+        }
       }
     }
   }
+  else {
+    //preg_replace used so I can limit to one replacement only
+    $updated_body = preg_replace('/(' . $nt . ')/i', '<a href="/node/'. $update_path .'">$1</a>', $body, 1);
+  }
+  
   return $updated_body;
 }
