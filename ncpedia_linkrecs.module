@@ -179,11 +179,17 @@ function ncpedia_linkrecs_page_submit($form, &$form_state) {
           if ((is_array($match_array)) && (isset($match_array['#value'])) && ($match_array['#value'] === 1)) {
             //Get selected entry body from database, update, save
             $n = node_load($node_to_update); 
-            $n->body['und'][0]['value'] = ncpedia_linkrecs_update_links($linked_term, $link_to_node_id, $n->body['und'][0]['value'], $match_array['#link_type']);
-            node_save($n);
-            $report_success = l($n->title, 'node/'. $n->nid, array('attributes' => array('target' => '_blank')));
-            $report_success .= t(" updated.");
-            drupal_set_message($report_success);
+            $temp_body = ncpedia_linkrecs_update_links($linked_term, $link_to_node_id, $n->body['und'][0]['value'], $match_array['#link_type']);
+            if ($temp_body !== '') {
+              $n->body['und'][0]['value'] = $temp_body;  
+              node_save($n);
+              $report_success = l($n->title, 'node/'. $n->nid, array('attributes' => array('target' => '_blank')));
+              $report_success .= t(" updated.");
+              drupal_set_message($report_success);
+            }
+            else {
+              drupal_set_message("There was an error with the update.");
+            }
           }
         }
       }
@@ -468,21 +474,31 @@ function ncpedia_linkrecs_review_links($nt, $body) {
  */
 function ncpedia_linkrecs_update_links ($nt, $update_path, $body, $link_type) {
 
+  //Get all the images, store temporarily in $img_matches[0]
+  $img_count = preg_match_all('/\<img.+?\/\>/is', $body, $img_matches);
+  $temp_body = preg_replace('/\<img.+?\/\>/is', '!!!IMG_REMOVED!!!', $body);
+  
   $updated_body = '';
   
   if ($link_type === 'external') {
-    if (preg_match_all('/\<a\shref=\"(.+?)\"\>(.+?)\<\/a\>/is', $body, $matches)) {
+    if (preg_match_all('/\<a\shref=\"(.+?)\"\>(.+?)\<\/a\>/is', $temp_body, $matches)) {
       for ($i=0; $i<count($matches[0]); $i++) {
-        if ($matches[2][$i] == $nt) {
-          $updated_body = str_replace($matches[0][$i], '<a href="/node/' . $update_path . '">' . $matches[2][$i] . '</a>', $body);        
+        if (stripos($matches[2][$i],$nt)!==FALSE) {
+          $updated_body = str_replace($matches[0][$i], '<a href="/node/' . $update_path . '">' . $matches[2][$i] . '</a>', $temp_body);
+          break;
         }
       }
     }
   }
   else {
     //preg_replace used so I can limit to one replacement only
-    $updated_body = preg_replace('/(' . $nt . ')/i', '<a href="/node/'. $update_path .'">$1</a>', $body, 1);
+    $updated_body = preg_replace('/(' . $nt . ')/i', '<a href="/node/'. $update_path .'">$1</a>', $temp_body, 1);
   }
+  
+  //Replace images
+  for ($i=0; $i<$img_count; $i++) {
+    $updated_body = preg_replace('/!!!IMG_REMOVED!!!/', $img_matches[0][$i], $updated_body, 1);
+  }  
   
   return $updated_body;
 }
