@@ -106,6 +106,8 @@ function ncpedia_linkrecs_page($form, &$form_state) {
         '#default_value' => 0,
       );
       foreach($titles as $title_variation => $link_candidates) {
+        //Collapse experimental plural variations by default. These have the potential to be
+        //weird or annoying.
         if (in_array($title_variation . 's', $title_list)) {
           $form['links'][$title_variation] = array(
             '#title' => t('Experimental plural variation (may not make sense): ' . $title_variation),
