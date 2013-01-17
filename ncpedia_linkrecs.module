@@ -44,7 +44,6 @@ function ncpedia_linkrecs_menu() {
     'page arguments' => array('ncpedia_linkrecs_page'),
     'access arguments' => array('access link suggestions page'),
   );
-  
   $items['admin/config/content/linkrecs/settings'] = array(
     'title' => 'Link recommender settings',
     'description' => 'link recommender configuration',
@@ -53,8 +52,7 @@ function ncpedia_linkrecs_menu() {
     'access arguments' => array('administer link recommender'),
     'file' => 'ncpedia_linkrecs.admin.inc',
     'file path' => drupal_get_path('module', 'ncpedia_linkrecs'),
-  );
-  
+  );  
   return $items;
 }
 
@@ -181,8 +179,9 @@ function ncpedia_linkrecs_page_submit($form, &$form_state) {
             $n = node_load($node_to_update); 
             $temp_body = ncpedia_linkrecs_update_links($linked_term, $link_to_node_id, $n->body['und'][0]['value'], $match_array['#link_type']);
             if ($temp_body !== '') {
+              drupal_set_message($temp_body);
               $n->body['und'][0]['value'] = $temp_body;  
-              node_save($n);
+              //node_save($n);
               $report_success = l($n->title, 'node/'. $n->nid, array('attributes' => array('target' => '_blank')));
               $report_success .= t(" updated.");
               drupal_set_message($report_success);
@@ -227,19 +226,12 @@ function ncpedia_linkrecs_node_update($node) {
       if ($result->rowCount() <= $max_links_suggested) {
         foreach ($result as $row) {
           
-          //set body value, stripping image tags from original - we don't want to consider
-          //text present in alt/title image attributes
-          $body = preg_replace('/\<img.+?\/\>/is', ' IMG_REMOVED ', $row->body_value);
-
-          //flags for link detection
-          //existing_link_checks[0] = internal links?
-          //existing_link_checks[1] = external links?
-          $existing_link_checks = ncpedia_linkrecs_review_links($nt, $body);
+          $existing_link_check = ncpedia_linkrecs_review_links($nt, ncpedia_linkrecs_get_tempbody($row->body_value));
           
           //Proceed with creating a link and contextual text, skipping:
           // * the entry itself (same nid)
-          // * articles that already have a matching internal link
-          if (($row->nid !== $node->nid) && (!$existing_link_checks[0])) {
+          // * articles that don't pass link review
+          if (($row->nid !== $node->nid) && (($existing_link_check == 'unlinked') || ($existing_link_check == 'external'))) {
             //If any items are found, present the link for further review, where all suggested links will be
             //available. No need to go beyond a preliminary list for this check, or even continue search 
             //once we've found something.
@@ -364,6 +356,8 @@ function ncpedia_linkrecs_check_for_links($nid) {
   foreach ($title as $nt) {
       
     //Pull titles of matches for count & approval
+    //Query does not do any complex searching, just looks for matching text
+    //We will do more thorough checks below
     $query = db_select('field_data_body', 'fdb');    
     $query->join('node','n','n.nid = fdb.entity_id');
     $query->fields('n', array('title', 'nid'))
@@ -378,22 +372,41 @@ function ncpedia_linkrecs_check_for_links($nid) {
       foreach ($result as $row) {
         //check master list, if not there, add it and proceed
         if (!in_array($row->nid, $master_list)) {
+         
+          //The query above merely matched text. However, there are instances when the match
+          //is not suitable:
+          //1. If the matching text is contained within an H1 tag (i.e., it's the title)
+          //2. If the matching text is contained within an image's alt/title text
+          //3. If the matching text is already linked
+          //
+          //In cases 1 & 2, we assume there are non-title, non-image date mataches as well,
+          //so we'll just strip out the H1 and IMGs and look elsewhere. In case 3, if the text
+          //is already INTERNALLY linked (i.e., to another page on the site), we will
+          //disregard it as a candidate. Though if the text is EXTERNALLY linked, we can 
+          //consider updating the link to the new internal candidate.
           
-          $master_list[] = $row->nid;
-          
-          //set body value, stripping image tags from original - we don't want to consider
-          //text present in alt/title image attributes
-          $body = preg_replace('/\<img.+?\/\>/is', ' IMG_REMOVED ', $row->body_value);
+          //set body value, stripping image and h1 tags from original - we don't want to consider
+          //text present in alt/title image attributes, nor titles
+          $body = ncpedia_linkrecs_get_tempbody($row->body_value);
 
-          //flags for link detection
-          //existing_link_checks[0] = internal links?
-          //existing_link_checks[1] = external links?
-          $existing_link_checks = ncpedia_linkrecs_review_links($nt, $body);
+          //Pass title & body to link reviewer
+          //Per that function documentation, one of three statuses is returned:
+          //'unlinked' - the text was found in the body, it is not linked          //
+          //'external' - the text was found in the body, linked externally
+          //'internal' - the text was found in the body, linked internally
+          //'not found' - the text was not found at all in the body (this is possible; it may
+          //              be a false positive - the match might have been a title or img match
+          //              and has been stripped out)
+          //
+          //We will proceed if unlinked or external
+          $existing_link_check = ncpedia_linkrecs_review_links($nt, $body);
           
           //Proceed with creating a link and contextual text, skipping:
           // * the entry itself (same nid)
           // * articles that already have a matching internal link
-          if (($row->nid !== $nid) && (!$existing_link_checks[0])) {
+          if (($row->nid !== $nid) && (($existing_link_check == 'unlinked') || ($existing_link_check == 'external'))) {
+
+            $master_list[] = $row->nid;
             
             //Find the first match. This is generally the only link we'd add.
             $location = stripos($body, $nt);
@@ -416,14 +429,9 @@ function ncpedia_linkrecs_check_for_links($nid) {
 
             $links[$nt][$row->title]['nid'] = $row->nid;
             $links[$nt][$row->title]['link'] = l($row->title, "node/" . $row->nid, array('attributes' => array('target' => '_blank')));
-            if ($existing_link_checks[1]) {
-              $links[$nt][$row->title]['context'] = 'EXTERNAL LINK FOUND. UPDATING WILL REPLACE: ' . $context;            
-              $links[$nt][$row->title]['link-type'] = 'external';
-            }
-            else {
-              $links[$nt][$row->title]['context'] = $context;
-              $links[$nt][$row->title]['link-type'] = 'internal';
-            }
+            $links[$nt][$row->title]['context'] = $existing_link_check === 'external' ?
+                    'EXTERNAL LINK FOUND. UPDATING WILL REPLACE: ' . $context : $context;
+            $links[$nt][$row->title]['link-type'] = $existing_link_check;
           }
         }
       }
@@ -437,31 +445,49 @@ function ncpedia_linkrecs_check_for_links($nid) {
 }
 
 /**
- * Finds all links in a node body (well, any string, really)
+ * Finds matching text in a node body and determines its link status. Returns one of
+ * the following statuses:
+ * 
+ *'unlinked' - the text was found in the body, it is not linked
+ *'external' - the text was found in the body, linked externally
+ *'internal' - the text was found in the body, linked internally
+ *'not found' - the text was not found at all in the body (this is possible; it may
+ *              be a false positive - the match might have been a title or img match
+ *              and has been stripped out)
  * 
  * @param string $nt is the 'node title', a string of text to search for
  * @param string $body
- * @return array
+ * @return string
  */
-
 function ncpedia_linkrecs_review_links($nt, $body) {
 
-  //flags for link detection
-  $internal_link_detected = FALSE;
-  $external_link_detected = FALSE;
+  $status = '';
+  
+  //Review all the links in the body for the intended match
+  //matches[0] = all link tags
+  //matches[1] = URL for each tag
+  //matches[2] = linked text
   if (preg_match_all('/\<a\shref=\"(.+?)\"\>(.+?)\<\/a\>/is', $body, $matches)) {
     for ($i=0; $i<count($matches[0]); $i++) {
-      if (preg_match("/$nt/is", $matches[2][$i])) {
-        if (preg_match('/^\//is', $matches[1][$i])) {
-          $internal_link_detected = TRUE;
+      //check all linked text for a match
+      if (stripos($matches[2][$i], $nt) !== FALSE) {  
+        //if you find it, assume URL that starts with a / is internal
+        if (preg_match('/^\//is', $matches[1][$i])) { 
+          $status = 'internal';
+          break;
         }
         else {
-          $external_link_detected = TRUE;
+          $status = 'external';
+          break;
         }
       }
     }
   }
-  return array($internal_link_detected, $external_link_detected);
+  if ($status === '') {
+    $status = stripos($body, $nt) !== FALSE ? 'unlinked' : 'not found';
+  }
+    
+  return $status;
 }
 
 /**
@@ -469,14 +495,15 @@ function ncpedia_linkrecs_review_links($nt, $body) {
  * @param string $nt The title string
  * @param string $update_path The node ID to link to
  * @param string $body
- * @param string $link_type 'external' or 'internal' considered; assumed 'internal' unless specified
+ * @param string $link_type 'external' or 'unlinked' considered; assumed 'unlinked' unless specified
  * @return type
  */
 function ncpedia_linkrecs_update_links ($nt, $update_path, $body, $link_type) {
 
   //Get all the images, store temporarily in $img_matches[0]
   $img_count = preg_match_all('/\<img.+?\/\>/is', $body, $img_matches);
-  $temp_body = preg_replace('/\<img.+?\/\>/is', '!!!IMG_REMOVED!!!', $body);
+  $h1_count = preg_match_all('/\<h1\>.+?\<?\/h1\>/is', $body, $h1_matches);
+  $temp_body = ncpedia_linkrecs_get_tempbody($body);
   
   $updated_body = '';
   
@@ -499,6 +526,23 @@ function ncpedia_linkrecs_update_links ($nt, $update_path, $body, $link_type) {
   for ($i=0; $i<$img_count; $i++) {
     $updated_body = preg_replace('/!!!IMG_REMOVED!!!/', $img_matches[0][$i], $updated_body, 1);
   }  
+  for ($i=0; $i<$h1_count; $i++) {
+    $updated_body = preg_replace('/!!!H1_REMOVED!!!/', $h1_matches[0][$i], $updated_body, 1);
+  }  
   
   return $updated_body;
+}
+
+function ncpedia_linkrecs_get_tempbody($body) {
+  
+  $search_array = array (
+    '/\<img.+?\/\>/is',
+    '/\<h1\>.+?\<?\/h1\>/is',
+  );
+  $replace_array = array (
+    '!!!IMG_REMOVED!!!',
+    '!!!H1_REMOVED!!!',
+  );
+  
+  return preg_replace($search_array, $replace_array, $body);
 }
