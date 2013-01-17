@@ -199,7 +199,7 @@ function ncpedia_linkrecs_page_submit($form, &$form_state) {
             if ($temp_body !== '') {
               drupal_set_message($temp_body);
               $n->body['und'][0]['value'] = $temp_body;  
-              //node_save($n);
+              node_save($n);
               $report_success = l($n->title, 'node/'. $n->nid, array('attributes' => array('target' => '_blank')));
               $report_success .= t(" updated.");
               drupal_set_message($report_success);
