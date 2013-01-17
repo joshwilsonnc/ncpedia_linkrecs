@@ -88,7 +88,13 @@ function ncpedia_linkrecs_page($form, &$form_state) {
       are replaced.");
     $list_of_links .= '<em>' . t('You should review all updates once they are completed.') . '</em></p>';
     $titles = ncpedia_linkrecs_check_for_links($requested);
-  
+    
+    //Extract title variations; used for plural checking
+    $title_list = array();
+    foreach($titles as $title_variation => $link_candidates) {
+      $title_list[] = $title_variation;
+    }
+      
     if (!empty($titles)) {
       $form['list'] = array(
         '#type' => 'markup',
@@ -100,12 +106,22 @@ function ncpedia_linkrecs_page($form, &$form_state) {
         '#default_value' => 0,
       );
       foreach($titles as $title_variation => $link_candidates) {
-        $form['links'][$title_variation] = array(
-          '#title' => t('Matches for: ' . $title_variation),
-          '#type' => 'fieldset',
-          '#collapsible' => TRUE,
-          '#collapsed' => FALSE,
-        );
+        if (in_array($title_variation . 's', $title_list)) {
+          $form['links'][$title_variation] = array(
+            '#title' => t('Experimental plural variation (may not make sense): ' . $title_variation),
+            '#type' => 'fieldset',
+            '#collapsible' => TRUE,
+            '#collapsed' => TRUE,
+          );
+        }
+        else {
+          $form['links'][$title_variation] = array(
+            '#title' => t('Matches for: ' . $title_variation),
+            '#type' => 'fieldset',
+            '#collapsible' => TRUE,
+            '#collapsed' => FALSE,
+          );          
+        }
         if (isset($link_candidates['skip'])) { 
           $form['links'][$title_variation]['skip'] = array(
             '#type' => 'markup',
