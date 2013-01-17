@@ -279,7 +279,7 @@ function ncpedia_linkrecs_parse_title($full_title) {
     '',
   );
   
-  $title[] = str_replace($title_removes_list, $title_replacements_list, $full_title);
+  $title[] = trim(str_replace($title_removes_list, $title_replacements_list, $full_title));
 
   //Check for cases of node titles being lastname, firstname(s)
   //if found, rearrange. Keep original in array, though
@@ -297,7 +297,7 @@ function ncpedia_linkrecs_parse_title($full_title) {
 
     //de-pluralize - can't reliably do this but at least try a simple -s removal
     if (preg_match('/s\Z/i', $title[0])) {
-      $title[] = substr($full_title, 0, strlen($full_title)-1);
+      $title[] = substr($title[0], 0, strlen($title[0])-1);
     }  
     //check for multi-part entries, strip "Part:" text if found
     //no need to bother trying to match "Part:" text, original can be overwritten
@@ -347,7 +347,7 @@ function ncpedia_linkrecs_check_for_links($nid) {
   $context_string_length = variable_get('ncpedia_linkrecs_context_length', 60);
   
   $title = ncpedia_linkrecs_parse_title(ncpedia_linkrecs_get_title($nid));  
-  
+ 
   $links = array();
       
   //keep track of all link suggestions to avoid duplication  
