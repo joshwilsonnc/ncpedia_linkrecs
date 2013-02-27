@@ -23,7 +23,7 @@
 function ncpedia_linkrecs_init() {
 
   // Grab the maximum number of link suggestions allowed from a variable, or set default
-  $max_suggestions = variable_get('ncpedia_linkrecs_max', 50);
+  $max_suggestions = variable_get('ncpedia_linkrecs_max', 30);
   // Save the max as a variable
   variable_set('ncpedia_linkrecs_max', $max_suggestions);
   
@@ -34,7 +34,7 @@ function ncpedia_linkrecs_init() {
 }
 
 /**
- * Implements hook_menu().
+ * Implements hook_menu()
  */
 function ncpedia_linkrecs_menu() {
   $items['admin/config/content/linkrecs'] = array(
@@ -79,33 +79,80 @@ function ncpedia_linkrecs_page($form, &$form_state) {
   
   $form = array();
   $requested = substr(strrchr(current_path(), "/"), 1);
+  $currently_under_review = 0;
   
   if ($requested !== 'linkrecs') {
-    $list_of_links = '<p>' . t('Suggested links to ');
-    $list_of_links .= l(ncpedia_linkrecs_get_title($requested), 'node/'.$requested, array('attributes' => array('target' => '_blank')));
-    $list_of_links .= t(" below. Review the suggestions (all links open in a new window) and 
+    //Build explanatory header text
+    $linkrecs_header = '<p>' . t('Suggested links to ');
+    $linkrecs_header .= l(ncpedia_linkrecs_get_title($requested), 'node/'.$requested, array('attributes' => array('target' => '_blank')));
+    $linkrecs_header .= t(" below. Review the suggestions (all links open in a new window) and 
       select which you'd like linked, then click 'Create Links' to update. External links
       are replaced.");
-    $list_of_links .= '<em>' . t('You should review all updates once they are completed.') . '</em></p>';
-    $titles = ncpedia_linkrecs_check_for_links($requested);
+    $linkrecs_header .= '<em>' . t('You should review all updates once they are completed.') . '</em></p>';
     
-    //Extract title variations; used for plural checking
-    $title_list = array();
-    foreach($titles as $title_variation => $link_candidates) {
-      $title_list[] = $title_variation;
+    //Populate linking candidates array with a call to _check_for_links
+    //Pager information can help determine which set of candidates to provide from a long list
+    $titles = array();
+    if (is_numeric($requested)) {
+      $currently_under_review = $requested;
+      $titles = ncpedia_linkrecs_check_for_links($requested);
     }
-      
+    else {
+      $page_info = explode('page', $requested);
+      if (count($page_info)===2 && is_numeric($page_info[0]) && is_numeric($page_info[1])) {
+        $currently_under_review = $page_info[0];
+        $titles = ncpedia_linkrecs_check_for_links($page_info[0], $page_info[1]);
+      }
+    }
+
+    //if there are possible matches, create a form to review them
     if (!empty($titles)) {
-      $form['list'] = array(
+      
+      //Extract title variations; used for plural checking
+      $title_list = array();
+      foreach($titles as $title_variation => $link_candidates) {
+        $title_list[] = $title_variation;
+      }
+      
+      //Add explanatory header text to the form
+      $form['linkrecs-header'] = array(
         '#type' => 'markup',
-        '#markup' => $list_of_links,
+        '#markup' => $linkrecs_header,
       );
-      $form['checkboxes-toggle'] = array(
+      
+      //if a pager is needed, include it here
+      if (isset($titles['linkrecs-page-end'])) {        
+        $pager_markup = '<p>';
+        if ($titles['linkrecs-page-end']['current-page'] > 0) {
+          $link_markup = $titles['linkrecs-page-end']['current-page'] - 1;
+          if ($link_markup == 0) {
+            $pager_markup .= l(t('Previous page'), 'admin/config/content/linkrecs/' . $currently_under_review);
+          }
+          else {
+            $pager_markup .= l(t('Previous page'), 'admin/config/content/linkrecs/' . $currently_under_review . 'page' . $link_markup);
+          }
+          $pager_markup .= $titles['linkrecs-page-end']['more-available'] ? ' | ' : '';
+        }        
+        if ($titles['linkrecs-page-end']['more-available'] === TRUE) {
+          $link_markup = $titles['linkrecs-page-end']['current-page'] + 1;
+          $pager_markup .=  l(t('Next page'), 'admin/config/content/linkrecs/' . $currently_under_review . 'page' . $link_markup);
+        }
+        $pager_markup .= '</p>';
+        
+        $form['linkrecs-pager'] = array(
+          '#type' => 'markup',
+          '#markup' => $pager_markup,
+        );
+        unset($titles['linkrecs-page-end']);
+      }
+      //Checkbox toggle
+      $form['linkrecs-checkboxes-toggle'] = array(
         '#title' => t('Check/Uncheck All'), 
         '#type' => 'checkbox',
         '#default_value' => 0,
       );
-      foreach($titles as $title_variation => $link_candidates) {
+      //Build main form
+      foreach($titles as $title_variation => $link_candidates) {        
         //Collapse experimental plural variations by default. These have the potential to be
         //weird or annoying.
         if (in_array($title_variation . 's', $title_list)) {
@@ -122,35 +169,28 @@ function ncpedia_linkrecs_page($form, &$form_state) {
             '#type' => 'fieldset',
             '#collapsible' => TRUE,
             '#collapsed' => FALSE,
-          );          
+          );       
         }
-        if (isset($link_candidates['skip'])) { 
-          $form['links'][$title_variation]['skip'] = array(
-            '#type' => 'markup',
-            '#markup' => $link_candidates['skip'],
+        //Main form-building loop. Places linking candidates into the form as checkbox options
+        foreach($link_candidates as $candidate) {
+          $form['links'][$title_variation][$candidate['nid']] = array(
+            '#title' => $candidate['link'],
+            '#description' => $candidate['context'],
+            '#link_type' => $candidate['link-type'],
+            '#type' => 'checkbox',
+            '#default_value' => 0,
+            '#states' => array(
+              'unchecked' => array (
+                ':input[name="checkboxes-toggle"]' => array('unchecked' => TRUE),
+              ),
+            )
           );
-        }
-        else {
-          foreach($link_candidates as $page) {
-            $form['links'][$title_variation][$page['nid']] = array(
-              '#title' => $page['link'],
-              '#description' => $page['context'],
-              '#link_type' => $page['link-type'],
-              '#type' => 'checkbox',
-              '#default_value' => 0,
-              '#states' => array(
-                'unchecked' => array (
-                  ':input[name="checkboxes-toggle"]' => array('unchecked' => TRUE),
-                ),
-              )
-            );    
-          }
         }
       }
       $form['linkrecs-submit'] = array(
         '#type' => 'submit',
         '#value' => t('Create Links'),
-      );
+      );   
     }
     else {
       $options = '<p>' . t('No suggested links found.') . '</p>';
@@ -189,6 +229,15 @@ function ncpedia_linkrecs_page_submit($form, &$form_state) {
   //normal suggestion form submission
   else {
     $link_to_node_id = $form_state['build_info']['args'][0]; 
+    
+    //Amend $link_to_node_id in the event that it has a pager suffix
+    if (!is_numeric($link_to_node_id)) {
+      $page_info = explode('page', $link_to_node_id);
+      if (count($page_info)===2 && is_numeric($page_info[0]) && is_numeric($page_info[1])) {
+        $link_to_node_id = $page_info[0];
+      }
+    }
+    
     foreach ($form_state['complete form']['links'] as $linked_term => $linked_term_array) {
       if (is_array($linked_term_array)) {
         foreach ($linked_term_array as $node_to_update => $match_array) {
@@ -221,9 +270,7 @@ function ncpedia_linkrecs_page_submit($form, &$form_state) {
  * If so, provides a link for detailed review.
  */
 function ncpedia_linkrecs_node_update($node) {
-  
-  $max_links_suggested = variable_get('ncpedia_linkrecs_max', 50);
-  
+ 
   //$title initialized as array of parsed titles - 
   //see ncpedia_linkrecs_parse_title documentation
   $title = ncpedia_linkrecs_parse_title($node->title);
@@ -241,27 +288,22 @@ function ncpedia_linkrecs_node_update($node) {
       ->addTag('node access');
 
       $result = $query->execute();
-      if ($result->rowCount() <= $max_links_suggested) {
-        foreach ($result as $row) {
-          
-          $existing_link_check = ncpedia_linkrecs_review_links($nt, ncpedia_linkrecs_get_tempbody($row->body_value));
-          
-          //Proceed with creating a link and contextual text, skipping:
-          // * the entry itself (same nid)
-          // * articles that don't pass link review
-          if (($row->nid !== $node->nid) && (($existing_link_check == 'unlinked') || ($existing_link_check == 'external'))) {
-            //If any items are found, present the link for further review, where all suggested links will be
-            //available. No need to go beyond a preliminary list for this check, or even continue search 
-            //once we've found something.
-            $helpful_msg = t("Link suggestions available for "). $node->title . t(". Click to review (opens new window).");
-            drupal_set_message(l($helpful_msg, 'admin/config/content/linkrecs/' . $node->nid, array('attributes' => array('target' => '_blank'))));
-            $no_match_found = FALSE;
-            break;
-          }
+
+      foreach ($result as $row) {
+        $existing_link_check = ncpedia_linkrecs_review_links($nt, ncpedia_linkrecs_get_tempbody($row->body_value));
+
+        //Proceed with creating a link and contextual text, skipping:
+        // * the entry itself (same nid)
+        // * articles that don't pass link review
+        if (($row->nid !== $node->nid) && (($existing_link_check == 'unlinked') || ($existing_link_check == 'external'))) {
+          //If any items are found, present the link for further review, where all suggested links will be
+          //available. No need to go beyond a preliminary list for this check, or even continue search 
+          //once we've found something.
+          $helpful_msg = t("Link suggestions available for "). $node->title . t(". Click to review (opens new window).");
+          drupal_set_message(l($helpful_msg, 'admin/config/content/linkrecs/' . $node->nid, array('attributes' => array('target' => '_blank'))));
+          $no_match_found = FALSE;
+          break;
         }
-      }
-      else {
-        drupal_set_message($result->rowCount() . " link suggestions found for $nt, but ignored. (Number found exceeds maximum of $max_links_suggested.)");
       }
     }
   }
@@ -355,24 +397,33 @@ function ncpedia_linkrecs_parse_title($full_title) {
 /**
  * Searches database for title matches
  * 
- * $nid is the node in question's ID
- * 
- * returns link array
+ * @param integer $nid
+ * @param integer $page
+ * @return array
  */
-function ncpedia_linkrecs_check_for_links($nid) {
+function ncpedia_linkrecs_check_for_links($nid,$page=0) {
   
-  $max_links_suggested = variable_get('ncpedia_linkrecs_max', 50);
+  $max_links_suggested = variable_get('ncpedia_linkrecs_max', 30);
   $context_string_length = variable_get('ncpedia_linkrecs_context_length', 60);
   
   $title = ncpedia_linkrecs_parse_title(ncpedia_linkrecs_get_title($nid));  
  
   $links = array();
+  //links_count and boundary variables to isolate a particular set of candidates
+  //for linking among a long list
+  $links_count = 0;
+  $links_min = $page * $max_links_suggested + 1;
+  $links_max = $page * $max_links_suggested + $max_links_suggested;
       
   //keep track of all link suggestions to avoid duplication  
   $master_list = array();
  
   foreach ($title as $nt) {
-      
+    
+    if ($links_count > $links_max) {
+      break;
+    }    
+    
     //Pull titles of matches for count & approval
     //Query does not do any complex searching, just looks for matching text
     //We will do more thorough checks below
@@ -380,52 +431,70 @@ function ncpedia_linkrecs_check_for_links($nid) {
     $query->join('node','n','n.nid = fdb.entity_id');
     $query->fields('n', array('title', 'nid'))
     ->fields('fdb', array('body_value'))
+    ->condition('fdb.body_value', '%'.db_like($nt).'%', 'LIKE')    
     ->orderBy('title', 'ASC')
-    ->condition('fdb.body_value', '%'.db_like($nt).'%', 'LIKE')
     ->addTag('node access');
-    
+
     $result = $query->execute();
-    
-    if ($result->rowCount() <= $max_links_suggested) {
-      foreach ($result as $row) {
-        //check master list, if not there, add it and proceed
-        if (!in_array($row->nid, $master_list)) {
-         
-          //The query above merely matched text. However, there are instances when the match
-          //is not suitable:
-          //1. If the matching text is contained within an H1 tag (i.e., it's the title)
-          //2. If the matching text is contained within an image's alt/title text
-          //3. If the matching text is already linked
-          //
-          //In cases 1 & 2, we assume there are non-title, non-image date mataches as well,
-          //so we'll just strip out the H1 and IMGs and look elsewhere. In case 3, if the text
-          //is already INTERNALLY linked (i.e., to another page on the site), we will
-          //disregard it as a candidate. Though if the text is EXTERNALLY linked, we can 
-          //consider updating the link to the new internal candidate.
-          
-          //set body value, stripping image and h1 tags from original - we don't want to consider
-          //text present in alt/title image attributes, nor titles
-          $body = ncpedia_linkrecs_get_tempbody($row->body_value);
 
-          //Pass title & body to link reviewer
-          //Per that function documentation, one of three statuses is returned:
-          //'unlinked' - the text was found in the body, it is not linked          //
-          //'external' - the text was found in the body, linked externally
-          //'internal' - the text was found in the body, linked internally
-          //'not found' - the text was not found at all in the body (this is possible; it may
-          //              be a false positive - the match might have been a title or img match
-          //              and has been stripped out)
-          //
-          //We will proceed if unlinked or external
-          $existing_link_check = ncpedia_linkrecs_review_links($nt, $body);
-          
-          //Proceed with creating a link and contextual text, skipping:
-          // * the entry itself (same nid)
-          // * articles that already have a matching internal link
-          if (($row->nid !== $nid) && (($existing_link_check == 'unlinked') || ($existing_link_check == 'external'))) {
+    foreach ($result as $row) {
+      //check master list, if not there, add it and proceed
+      if (!in_array($row->nid, $master_list)) {
 
-            $master_list[] = $row->nid;
-            
+        //The query above merely matched text. However, there are instances when the match
+        //is not suitable:
+        //1. If the matching text is contained within an H1 tag (i.e., it's the title)
+        //2. If the matching text is contained within an image's alt/title text
+        //3. If the matching text is already linked
+        //
+        //In cases 1 & 2, we assume there are non-title, non-image date mataches as well,
+        //so we'll just strip out the H1 and IMGs and look elsewhere. In case 3, if the text
+        //is already INTERNALLY linked (i.e., to another page on the site), we will
+        //disregard it as a candidate. Though if the text is EXTERNALLY linked, we can 
+        //consider updating the link to the new internal candidate.
+
+        //set body value, stripping image and h1 tags from original - we don't want to consider
+        //text present in alt/title image attributes, nor titles
+        $body = ncpedia_linkrecs_get_tempbody($row->body_value);
+
+        //Pass title & body to link reviewer
+        //Per that function documentation, one of three statuses is returned:
+        //'unlinked' - the text was found in the body, it is not linked
+        //'external' - the text was found in the body, linked externally
+        //'internal' - the text was found in the body, linked internally
+        //'not found' - the text was not found at all in the body (this is possible; it may
+        //              be a false positive - the match might have been a title or img match
+        //              and has been stripped out)
+        //
+        //We will proceed if unlinked or external
+        $existing_link_check = ncpedia_linkrecs_review_links($nt, $body);
+
+        //Proceed with creating a link and contextual text, skipping:
+        // * the entry itself (same nid)
+        // * articles that already have a matching internal link
+        if (($row->nid !== $nid) && (($existing_link_check == 'unlinked') || ($existing_link_check == 'external'))) {
+
+          $master_list[] = $row->nid;
+
+          $links_count++;
+
+          //If we're over the max, that implies we've already filled up the return array
+          //and there are additional suggestions, so this signals the form builder that
+          //we need a "Next" link in the pager
+          if ($links_count > $links_max) {
+            $links['linkrecs-page-end']['more-available'] = TRUE;
+            break;
+          }
+
+          if ($links_count >= $links_min) {
+            //We've met the minimum, and the above test implies we're under the max, so
+            //we can add this item to the array.
+            //Earlier version did a range query to speed things up but this lead to 
+            //problems. The query is imprecise and will retrieve already matched items and
+            //such that need to be filtered post-query. It's something of a performance
+            //penalty, but the whole set needs to be retrieved and counted manually as
+            //candidates are found.
+
             //Find the first match. This is generally the only link we'd add.
             $location = stripos($body, $nt);
             //Context snippet start point should be the location of the needle minus the 
@@ -450,12 +519,18 @@ function ncpedia_linkrecs_check_for_links($nid) {
             $links[$nt][$row->title]['context'] = $existing_link_check === 'external' ?
                     'EXTERNAL LINK FOUND. UPDATING WILL REPLACE: ' . $context : $context;
             $links[$nt][$row->title]['link-type'] = $existing_link_check;
+
+            //When right at the max point (or if you're simply not on the initial page,
+            //set the page-end elements in the return array.
+            //We continue to process though, to see if there are more available. Could
+            //be that this is the last one anyway.
+            if (($links_count === $links_max) || ($page != 0)) {
+              $links['linkrecs-page-end']['current-page'] = $page;
+              $links['linkrecs-page-end']['more-available'] = FALSE;
+            }    
           }
         }
       }
-    }
-    else {
-      $links[$nt]['skip'] = '<strong>' . t("Skipped. ") . $result->rowCount() . t(" link suggestions found for $nt, exceeding maximum of ") . $max_links_suggested . '</strong>';
     }
   }
 
