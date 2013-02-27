@@ -282,10 +282,10 @@ function ncpedia_linkrecs_node_update($node) {
   //$title initialized as array of parsed titles - 
   //see ncpedia_linkrecs_parse_title documentation
   $title = ncpedia_linkrecs_parse_title($node->title);
-  $no_match_found = TRUE;
+  $match_found = TRUE;
 
   foreach ($title as $nt) {
-    if ($no_match_found) {
+    if ($match_found) {
       break;
     }
     //Pull titles of matches for count & approval
@@ -311,7 +311,7 @@ function ncpedia_linkrecs_node_update($node) {
         //once we've found something.
         $helpful_msg = t("Link suggestions available for "). $node->title . t(". Click to review (opens new window).");
         drupal_set_message(l($helpful_msg, 'admin/config/content/linkrecs/' . $node->nid, array('attributes' => array('target' => '_blank'))));
-        $no_match_found = FALSE;
+        $match_found = TRUE;
         break;
       }
     }
