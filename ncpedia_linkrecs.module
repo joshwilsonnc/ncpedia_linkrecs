@@ -90,14 +90,6 @@ function ncpedia_linkrecs_page($form, &$form_state) {
   $currently_under_review = 0;
   
   if ($requested !== 'linkrecs') {
-    //Build explanatory header text
-    $linkrecs_header = '<p>' . t('Suggested links to ');
-    $linkrecs_header .= l(ncpedia_linkrecs_get_title($requested), 'node/'.$requested, array('attributes' => array('target' => '_blank')));
-    $linkrecs_header .= t(" below. Review the suggestions (all links open in a new window) and 
-      select which you'd like linked, then click 'Create Links' to update. External links
-      are replaced.");
-    $linkrecs_header .= '<em>' . t('You should review all updates once they are completed.') . '</em></p>';
-    
     //Populate linking candidates array with a call to _check_for_links
     //Pager information can help determine which set of candidates to provide from a long list
     $titles = array();
@@ -115,6 +107,14 @@ function ncpedia_linkrecs_page($form, &$form_state) {
 
     //if there are possible matches, create a form to review them
     if (!empty($titles)) {
+    
+      //Build explanatory header text
+      $linkrecs_header = '<p>' . t('Suggested links to ');
+      $linkrecs_header .= l(ncpedia_linkrecs_get_title($currently_under_review), 'node/'.$currently_under_review, array('attributes' => array('target' => '_blank')));
+      $linkrecs_header .= t(" below. Review the suggestions (all links open in a new window) and 
+        select which you'd like linked, then click 'Create Links' to update. External links
+        are replaced.");
+      $linkrecs_header .= '<em>' . t('You should review all updates once they are completed.') . '</em></p>';
       
       //Extract title variations; used for plural checking
       $title_list = array();
@@ -202,7 +202,7 @@ function ncpedia_linkrecs_page($form, &$form_state) {
     }
     else {
       $options = '<p>' . t('No suggested links found.') . '</p>';
-      $options .= '<p>' . l(t('Back to ') . ncpedia_linkrecs_get_title($requested), 'node/'.$requested) . '</p>';
+      $options .= '<p>' . l(t('Back to ') . ncpedia_linkrecs_get_title($currently_under_review), 'node/'.$currently_under_review) . '</p>';
       $form['information'] = array(
         '#type' => 'markup',
         '#markup' => $options,
