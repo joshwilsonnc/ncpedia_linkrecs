@@ -282,7 +282,7 @@ function ncpedia_linkrecs_node_update($node) {
   //$title initialized as array of parsed titles - 
   //see ncpedia_linkrecs_parse_title documentation
   $title = ncpedia_linkrecs_parse_title($node->title);
-  $match_found = TRUE;
+  $match_found = FALSE;
 
   foreach ($title as $nt) {
     if ($match_found) {
