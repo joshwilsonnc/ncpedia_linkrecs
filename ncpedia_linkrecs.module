@@ -34,6 +34,14 @@ function ncpedia_linkrecs_init() {
 }
 
 /**
+ * Implements hook_uninstall()
+ */
+function ncpedia_linrecs_uninstall() {
+  variable_del('ncpedia_linkrecs_max');
+  variable_del('ncpedia_linkrecs_context_length');
+}
+
+/**
  * Implements hook_menu()
  */
 function ncpedia_linkrecs_menu() {
