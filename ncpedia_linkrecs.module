@@ -286,32 +286,33 @@ function ncpedia_linkrecs_node_update($node) {
 
   foreach ($title as $nt) {
     if ($no_match_found) {
-      //Pull titles of matches for count & approval
-      $query = db_select('field_data_body', 'fdb');    
-      $query->join('node','n','n.nid = fdb.entity_id');
-      $query->fields('n', array('title', 'nid'))
-      ->fields('fdb', array('body_value'))
-      ->orderBy('title', 'ASC')
-      ->condition('fdb.body_value', '%'.db_like($nt).'%', 'LIKE')
-      ->addTag('node access');
+      break;
+    }
+    //Pull titles of matches for count & approval
+    $query = db_select('field_data_body', 'fdb');    
+    $query->join('node','n','n.nid = fdb.entity_id');
+    $query->fields('n', array('title', 'nid'))
+    ->fields('fdb', array('body_value'))
+    ->orderBy('title', 'ASC')
+    ->condition('fdb.body_value', '%'.db_like($nt).'%', 'LIKE')
+    ->addTag('node access');
 
-      $result = $query->execute();
+    $result = $query->execute();
 
-      foreach ($result as $row) {
-        $existing_link_check = ncpedia_linkrecs_review_links($nt, ncpedia_linkrecs_get_tempbody($row->body_value));
+    foreach ($result as $row) {
+      $existing_link_check = ncpedia_linkrecs_review_links($nt, ncpedia_linkrecs_get_tempbody($row->body_value));
 
-        //Proceed with creating a link and contextual text, skipping:
-        // * the entry itself (same nid)
-        // * articles that don't pass link review
-        if (($row->nid !== $node->nid) && (($existing_link_check == 'unlinked') || ($existing_link_check == 'external'))) {
-          //If any items are found, present the link for further review, where all suggested links will be
-          //available. No need to go beyond a preliminary list for this check, or even continue search 
-          //once we've found something.
-          $helpful_msg = t("Link suggestions available for "). $node->title . t(". Click to review (opens new window).");
-          drupal_set_message(l($helpful_msg, 'admin/config/content/linkrecs/' . $node->nid, array('attributes' => array('target' => '_blank'))));
-          $no_match_found = FALSE;
-          break;
-        }
+      //Proceed with creating a link and contextual text, skipping:
+      // * the entry itself (same nid)
+      // * articles that don't pass link review
+      if (($row->nid !== $node->nid) && (($existing_link_check == 'unlinked') || ($existing_link_check == 'external'))) {
+        //If any items are found, present the link for further review, where all suggested links will be
+        //available. No need to go beyond a preliminary list for this check, or even continue search 
+        //once we've found something.
+        $helpful_msg = t("Link suggestions available for "). $node->title . t(". Click to review (opens new window).");
+        drupal_set_message(l($helpful_msg, 'admin/config/content/linkrecs/' . $node->nid, array('attributes' => array('target' => '_blank'))));
+        $no_match_found = FALSE;
+        break;
       }
     }
   }
