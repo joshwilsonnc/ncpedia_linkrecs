@@ -134,16 +134,16 @@ function ncpedia_linkrecs_page($form, &$form_state) {
         if ($titles['linkrecs-page-end']['current-page'] > 0) {
           $link_markup = $titles['linkrecs-page-end']['current-page'] - 1;
           if ($link_markup == 0) {
-            $pager_markup .= l(t('Previous page'), 'admin/config/content/linkrecs/' . $currently_under_review);
+            $pager_markup .= l(t('<< Previous page'), 'admin/config/content/linkrecs/' . $currently_under_review);
           }
           else {
-            $pager_markup .= l(t('Previous page'), 'admin/config/content/linkrecs/' . $currently_under_review . 'page' . $link_markup);
+            $pager_markup .= l(t('<< Previous page'), 'admin/config/content/linkrecs/' . $currently_under_review . 'page' . $link_markup);
           }
           $pager_markup .= $titles['linkrecs-page-end']['more-available'] ? ' | ' : '';
         }        
         if ($titles['linkrecs-page-end']['more-available'] === TRUE) {
           $link_markup = $titles['linkrecs-page-end']['current-page'] + 1;
-          $pager_markup .=  l(t('Next page'), 'admin/config/content/linkrecs/' . $currently_under_review . 'page' . $link_markup);
+          $pager_markup .=  l(t('Next page >>'), 'admin/config/content/linkrecs/' . $currently_under_review . 'page' . $link_markup);
         }
         $pager_markup .= '</p>';
         
@@ -189,7 +189,7 @@ function ncpedia_linkrecs_page($form, &$form_state) {
             '#default_value' => 0,
             '#states' => array(
               'unchecked' => array (
-                ':input[name="checkboxes-toggle"]' => array('unchecked' => TRUE),
+                ':input[name="linkrecs-checkboxes-toggle"]' => array('unchecked' => TRUE),
               ),
             )
           );
