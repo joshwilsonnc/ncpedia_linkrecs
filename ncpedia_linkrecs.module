@@ -128,9 +128,11 @@ function ncpedia_linkrecs_page($form, &$form_state) {
         '#markup' => $linkrecs_header,
       );
       
-      //if a pager is needed, include it here
+      //if a pager is needed, create markup and unset that element from the array before proceeding
+      //we'll append actual pager at the bottom of the form
+      $pager_markup = '';
       if (isset($titles['linkrecs-page-end'])) {        
-        $pager_markup = '<p>';
+        $pager_markup .= '<p>';
         if ($titles['linkrecs-page-end']['current-page'] > 0) {
           $link_markup = $titles['linkrecs-page-end']['current-page'] - 1;
           if ($link_markup == 0) {
@@ -147,10 +149,6 @@ function ncpedia_linkrecs_page($form, &$form_state) {
         }
         $pager_markup .= '</p>';
         
-        $form['linkrecs-pager'] = array(
-          '#type' => 'markup',
-          '#markup' => $pager_markup,
-        );
         unset($titles['linkrecs-page-end']);
       }
       //Checkbox toggle
@@ -199,6 +197,12 @@ function ncpedia_linkrecs_page($form, &$form_state) {
         '#type' => 'submit',
         '#value' => t('Create Links'),
       );   
+      if ($pager_markup !== '') {
+        $form['linkrecs-pager'] = array(
+          '#type' => 'markup',
+          '#markup' => $pager_markup,
+        );
+      }
     }
     else {
       $options = '<p>' . t('No suggested links found.') . '</p>';
