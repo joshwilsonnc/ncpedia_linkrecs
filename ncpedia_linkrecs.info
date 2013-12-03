@@ -3,3 +3,6 @@ name = NCpedia Link Recommender
 description = Suggests links based on submitted pages
 core = 7.x
 package = Zoo
+files[] = ncpedia_linkrecs.module
+files[] = ncpedia_linkrecs.pages.inc
+files[] = ncpedia_linkrecs.admin.inc
