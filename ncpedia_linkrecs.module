@@ -84,8 +84,59 @@ function ncpedia_linkrecs_uninstall() {
   variable_del('ncpedia_linkrecs_context_length');
 }
 
+/**
+ * Does a basic database scan to see if there are match candidates.
+ * If so, provides a link for detailed review.
+ */
 function ncpedia_linkrecs_page_tab() {
-  return "Suggestions will go here";
+  
+  $helpful_msg = "No link suggestions found.";
+  
+  //$title initialized as array of parsed titles - 
+  //see ncpedia_linkrecs_parse_title documentation
+  if (preg_match('/node\/([1-9]*)\/suggestions/', current_path(), $matches)) {
+    if ($node = node_load($matches[1])) {
+  
+      $title = ncpedia_linkrecs_parse_title($node->title);
+      $match_found = FALSE;
+      
+      foreach ($title as $nt) {
+        if ($match_found) {
+          break;
+        }
+        //Pull titles of matches for count & approval
+        $query = db_select('field_data_body', 'fdb');    
+        $query->join('node','n','n.nid = fdb.entity_id');
+        $query->fields('n', array('title', 'nid'))
+        ->fields('fdb', array('body_value'))
+        ->orderBy('title', 'ASC')
+        ->condition('fdb.body_value', '%'.db_like($nt).'%', 'LIKE')
+        ->addTag('node_access');
+
+        $result = $query->execute();
+
+        foreach ($result as $row) {
+          $existing_link_check = ncpedia_linkrecs_review_links($nt, ncpedia_linkrecs_get_tempbody($row->body_value));
+
+          //Proceed with creating a link and contextual text, skipping:
+          // * the entry itself (same nid)
+          // * articles that don't pass link review
+          if (($row->nid !== $node->nid) && (($existing_link_check == 'unlinked') || ($existing_link_check == 'external'))) {
+            //If any items are found, present the link for further review, where all suggested links will be
+            //available. No need to go beyond a preliminary list for this check, or even continue search 
+            //once we've found something.
+            $helpful_msg = t("Link suggestions available for "). $node->title . t(". Click to review (opens new window).");        
+            $helpful_msg = l($helpful_msg, 'admin/config/content/linkrecs/' . $node->nid, array('attributes' => array('target' => '_blank')));
+            $match_found = TRUE;
+            break;
+          }
+        }
+      }
+      
+    }    
+  } 
+ 
+  return $helpful_msg;
 }
 
 /**
@@ -94,46 +145,10 @@ function ncpedia_linkrecs_page_tab() {
  * Does a basic database scan to see if there are match candidates.
  * If so, provides a link for detailed review.
  */
-function ncpedia_linkrecs_node_update($node) {
- 
-  //$title initialized as array of parsed titles - 
-  //see ncpedia_linkrecs_parse_title documentation
-  $title = ncpedia_linkrecs_parse_title($node->title);
-  $match_found = FALSE;
-
-  foreach ($title as $nt) {
-    if ($match_found) {
-      break;
-    }
-    //Pull titles of matches for count & approval
-    $query = db_select('field_data_body', 'fdb');    
-    $query->join('node','n','n.nid = fdb.entity_id');
-    $query->fields('n', array('title', 'nid'))
-    ->fields('fdb', array('body_value'))
-    ->orderBy('title', 'ASC')
-    ->condition('fdb.body_value', '%'.db_like($nt).'%', 'LIKE')
-    ->addTag('node access');
-
-    $result = $query->execute();
-
-    foreach ($result as $row) {
-      $existing_link_check = ncpedia_linkrecs_review_links($nt, ncpedia_linkrecs_get_tempbody($row->body_value));
-
-      //Proceed with creating a link and contextual text, skipping:
-      // * the entry itself (same nid)
-      // * articles that don't pass link review
-      if (($row->nid !== $node->nid) && (($existing_link_check == 'unlinked') || ($existing_link_check == 'external'))) {
-        //If any items are found, present the link for further review, where all suggested links will be
-        //available. No need to go beyond a preliminary list for this check, or even continue search 
-        //once we've found something.
-        $helpful_msg = t("Link suggestions available for "). $node->title . t(". Click to review (opens new window).");
-        drupal_set_message(l($helpful_msg, 'admin/config/content/linkrecs/' . $node->nid, array('attributes' => array('target' => '_blank'))));
-        $match_found = TRUE;
-        break;
-      }
-    }
-  }
-}
+//function ncpedia_linkrecs_node_update($node) {
+// 
+//
+//}
 
 /**
  * Main form-building page
