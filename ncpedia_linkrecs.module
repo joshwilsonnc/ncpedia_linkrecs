@@ -25,28 +25,9 @@
  * I recently discovered a few backend issues with this module that need to be 
  * addressed. Will fix April 2014.
  * 
- * -variable implementation problem
  * -extremely slow query in search
  * -should not run after every save
  */
-
-
-/**
- * Implements hook_init()
- */
-function ncpedia_linkrecs_init() {
-
-  // Grab the maximum number of link suggestions allowed from a variable, or set default
-  $max_suggestions = variable_get('ncpedia_linkrecs_max', 30);
-  // Save the max as a variable
-
-  variable_set('ncpedia_linkrecs_max', $max_suggestions);
-  
-  // Grab the maximum number of link suggestions allowed from a variable, or set default
-  $context_length = variable_get('ncpedia_linkrecs_context_length', 60);
-  // Save the max as a variable
-  variable_set('ncpedia_linkrecs_context_length', $context_length);
-}
 
 /**
  * Implements hook_uninstall()
