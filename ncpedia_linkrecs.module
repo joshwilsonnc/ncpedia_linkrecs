@@ -6,7 +6,7 @@
  *@file
  * Suggests links between pages on your site
  *  
- * before publication, 
+ * GENERAL TODOs
  * **error handling http://drupal.org/node/672504
  * **Way to flag as reviewed? Would that even be something you'd want?
  * **body['und'][0]['value'] consistent? what the hell is 'und'?
@@ -14,19 +14,17 @@
  * **move some internal functions to an include file?
  * **comments conform to standards
  * 
- * *Test line from d7dev
  */
 
 /**
- * TODOs
+ * CRITICAL TODOs
  * 
  * **These should be addressed before continuing to use this module **
  * 
  * I recently discovered a few backend issues with this module that need to be 
  * addressed. Will fix April 2014.
  * 
- * -extremely slow query in search
- * -should not run after every save
+ * -poor search - uses MYSQL LIKE function on (increasingly large) text set
  */
 
 /**
@@ -109,7 +107,6 @@ function ncpedia_linkrecs_page_tab() {
         $query->join('node','n','n.nid = fdb.entity_id');
         $query->fields('n', array('title', 'nid'))
         ->fields('fdb', array('body_value'))
-        ->orderBy('title', 'ASC')
         ->condition('fdb.body_value', '%'.db_like($nt).'%', 'LIKE')
         ->addTag('node_access');
 
@@ -142,8 +139,8 @@ function ncpedia_linkrecs_page_tab() {
 /**
  * Implements hook_node_update()
  * 
- * Does a basic database scan to see if there are match candidates.
- * If so, provides a link for detailed review.
+ * Removed in favor of an on-demand tab to check for links. Could be restored (should be
+ * an admin choice of on-save vs tab?) once search is improved.
  */
 //function ncpedia_linkrecs_node_update($node) {
 // 
@@ -348,6 +345,8 @@ function ncpedia_linkrecs_page_submit($form, &$form_state) {
 /**
  * Returns a node's title when given a node id
  * 
+ * Lighter-weight over a full node load, since we only need title
+ * 
  * @param integer $nid
  * @return string
  */
@@ -469,7 +468,7 @@ function ncpedia_linkrecs_check_for_links($nid,$page=0) {
     ->fields('fdb', array('body_value'))
     ->condition('fdb.body_value', '%'.db_like($nt).'%', 'LIKE')    
     ->orderBy('title', 'ASC')
-    ->addTag('node access');
+    ->addTag('node_access');
 
     $result = $query->execute();
 
