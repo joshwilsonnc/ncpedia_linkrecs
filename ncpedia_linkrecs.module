@@ -83,7 +83,7 @@ function ncpedia_linkrecs_uninstall() {
 }
 
 /**
- * Does a basic database scan to see if there are match candidates.
+ * Does a basic database search to see if there are match candidates.
  * If so, provides a link for detailed review.
  */
 function ncpedia_linkrecs_page_tab() {
@@ -103,14 +103,15 @@ function ncpedia_linkrecs_page_tab() {
           break;
         }
         //Pull titles of matches for count & approval
-        $query = db_select('field_data_body', 'fdb');    
-        $query->join('node','n','n.nid = fdb.entity_id');
-        $query->fields('n', array('title', 'nid'))
-        ->fields('fdb', array('body_value'))
-        ->condition('fdb.body_value', '%'.db_like($nt).'%', 'LIKE')
-        ->addTag('node_access');
-
-        $result = $query->execute();
+        //Note: retrieving one at a time might reduce search pain but maybe not!
+        //There are false positives (that's why we do the link review) and you'd 
+        //have to order results and add overhead of remembering where on the list
+        //you are. Maybe worth more research but I didn't notice it helping enough
+        //when doing a LIMIT 1 to bother making it work.      
+        $result = db_query("SELECT n.nid AS nid, fdb.body_value AS body_value 
+          FROM field_data_body fdb INNER JOIN node n ON n.nid = fdb.entity_id 
+          WHERE (fdb.body_value LIKE :search)",
+                array(':search' => "%".$nt."%"));
 
         foreach ($result as $row) {
           $existing_link_check = ncpedia_linkrecs_review_links($nt, ncpedia_linkrecs_get_tempbody($row->body_value));
