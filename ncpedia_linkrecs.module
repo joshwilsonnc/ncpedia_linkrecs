@@ -431,10 +431,8 @@ function ncpedia_linkrecs_check_for_links($nid,$page=0) {
         //              be a false positive - the match might have been a title or img match
         //              and has been stripped out)
         //
-        //We will proceed if unlinked or external
+        //We will proceed if unlinked or external        
         $existing_link_check = ncpedia_linkrecs_review_links($nt, $body);
-        dpm($nt);
-        dpm($existing_link_check);
 
         //Proceed with creating a link and contextual text, skipping:
         // * the entry itself (same nid)
@@ -520,7 +518,7 @@ function ncpedia_linkrecs_check_for_links($nid,$page=0) {
  * @return string
  */
 function ncpedia_linkrecs_review_links($nt, $body) {
-
+  
   $status = '';
   
   //Review all the links in the body for the intended match
@@ -546,7 +544,10 @@ function ncpedia_linkrecs_review_links($nt, $body) {
   if ($status === '') {
     $status = stripos($body, $nt) !== FALSE ? 'unlinked' : 'not found';
   }
-    
+  dpm('[in link review] ' . $nt);
+  dpm($body);
+  dpm($status);
+  
   return $status;
 }
 
