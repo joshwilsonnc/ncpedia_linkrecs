@@ -9,9 +9,11 @@
  * GENERAL TODOs
  * **error handling http://drupal.org/node/672504
  * **Way to flag as reviewed? Would that even be something you'd want?
- * **body['und'][0]['value'] consistent? what the hell is 'und'?
+ * **body['und'][0]['value'] consistent?
  * **needs to be more generalized: option to match between content types, fields
- * **move some internal functions to an include file?
+ * ***improved admin options here
+ * **admin options for internal table search vs indexed table search vs external
+ * **move internal functions to an include file
  * **comments conform to standards
  * 
  */
@@ -24,13 +26,16 @@
  * I recently discovered a few backend issues with this module that need to be 
  * addressed. Will fix April 2014.
  * 
- * -poor search - uses MYSQL LIKE function on (increasingly large) text set
- * --in the absence of a Solr-like option, some ideas:
- * ---don't do all the complex title breakdowns, or find a better way to do this
- * rather than doing a table scan for each subterm
- * ---provide a link to the title breakdowns to do on-demand, rather than all the
- * time
- * ---work off a Full text index, for bloody's sake
+ * Yay! Fulltext search. But some more tweaks before it's ready:
+ * -search options? plurals etc
+ * -provide a link to the title breakdowns to do on-demand, rather than all the
+ * time (needed? or are we fast enough now that who cares?)
+ * -run in-tab, not in another screen?
+ * -test what happens if your index is out of date (probably it just doesn't find
+ * the text and fails to update, but how about we be sure of that)
+ * -cron script for keeping current in production
+ * -under content instead of config
+ * -keep index out of backup
  */
 
 /**
