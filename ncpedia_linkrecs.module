@@ -27,13 +27,12 @@
  * addressed. Will fix April 2014.
  * 
  * Yay! Fulltext search. But some more tweaks before it's ready:
- * -search options? plurals etc
- * -provide a link to the title breakdowns to do on-demand, rather than all the
- * time (needed? or are we fast enough now that who cares?)
  * -test what happens if your index is out of date (probably it just doesn't find
  * the text and fails to update, but how about we be sure of that)
  * -cron script for keeping current in production
  * -keep index out of backup
+ * -install function to create table, add to cron? or at least 
+ * check that anyone using fulltext doesn't get an error
  */
 
 /**
@@ -363,6 +362,7 @@ function ncpedia_linkrecs_check_for_links($nid,$page=0) {
   
   $max_links_suggested = variable_get('ncpedia_linkrecs_max', 30);
   $context_string_length = variable_get('ncpedia_linkrecs_context_length', 60);
+  $search_style = variable_get('ncpedia_linkrecs_search_style', 'default');
   
   $title = ncpedia_linkrecs_parse_title(ncpedia_linkrecs_get_title($nid));  
  
@@ -386,22 +386,26 @@ function ncpedia_linkrecs_check_for_links($nid,$page=0) {
     //Query does not do any complex searching, just looks for matching text
     //We will do more thorough checks below      
     
-    //THIS VERSION uses Drupal's default field_data_body table
-    //Not very efficient, doesn't scale. Does a full table scan. But, requires
-    //no additional tables or indexing.
-    //    $result = db_query("SELECT n.title AS title, n.nid AS nid, fdb.body_value AS body_value 
-    //      FROM field_data_body fdb INNER JOIN node n ON n.nid = fdb.entity_id 
-    //      WHERE (fdb.body_value LIKE :search) ORDER BY title ASC",
-    //            array(':search' => "%".$nt."%"));   
+    switch ($search_style) {
+      case "fulltext":
+        //THIS VERSION uses a full-text indexed table
+        //Much faster than above! But requires a pre-built table with FULLTEXT indexing
+        //Still not as efficient as an external search (e.g., Solr)
+        $result = db_query('SELECT n.title AS title, n.nid AS nid, lh.body_value AS body_value
+          FROM {ncpedia_linkrecs_helper} lh INNER JOIN {node} n ON n.nid = lh.entity_id 
+          WHERE MATCH (lh.body_value) AGAINST (:search IN BOOLEAN MODE) ORDER BY title ASC',
+                array(':search' => '+"'.$nt.'"'));
+        break;
+      default:
+        //THIS VERSION uses Drupal's default field_data_body table
+        //Not very efficient, doesn't scale. Does a full table scan. But, requires
+        //no additional tables or indexing.
+        $result = db_query("SELECT n.title AS title, n.nid AS nid, fdb.body_value AS body_value 
+          FROM {field_data_body} fdb INNER JOIN {node} n ON n.nid = fdb.entity_id 
+          WHERE (fdb.body_value LIKE :search) ORDER BY title ASC",
+                array(':search' => "%".$nt."%")); 
+    }
     
-    //THIS VERSION uses a full-text indexed table
-    //Much faster than above! But requires a pre-built table with FULLTEXT indexing
-    //Still not as efficient as an external search (e.g., Solr)
-    $result = db_query('SELECT n.title AS title, n.nid AS nid, lh.body_value AS body_value
-    FROM {ncpedia_linkrecs_helper} lh INNER JOIN {node} n ON n.nid = lh.entity_id 
-    WHERE MATCH (lh.body_value) AGAINST (:search IN BOOLEAN MODE) ORDER BY title ASC',
-          array(':search' => '+"'.$nt.'"'));
-
     foreach ($result as $row) {
       //Skip self-matches.
       //Check master list, if not there, add it and proceed
@@ -419,9 +423,20 @@ function ncpedia_linkrecs_check_for_links($nid,$page=0) {
         //disregard it as a candidate. Though if the text is EXTERNALLY linked, we can 
         //consider updating the link to the new internal candidate.
 
-        //set body value, stripping image and h1 tags from original - we don't want to consider
-        //text present in alt/title image attributes, nor titles
-        $body = ncpedia_linkrecs_get_tempbody($row->body_value);
+        //get node body value  
+        //stripping image and h1 tags from original - we don't want to consider
+        //text present in alt/title image attributes, nor titles 
+        switch ($search_style) {
+          case "fulltext":
+            $r = db_query("SELECT fdb.body_value AS body_value 
+                FROM {field_data_body} fdb WHERE fdb.entity_id=:nid",
+                array(':nid' => $row->nid)); 
+            $body_col = $r->fetchCol();
+            $body = ncpedia_linkrecs_get_tempbody($body_col[0]);
+            break;
+          default:
+            $body = ncpedia_linkrecs_get_tempbody($row->body_value);
+        }
 
         //Pass title & body to link reviewer
         //Per that function documentation, one of three statuses is returned:

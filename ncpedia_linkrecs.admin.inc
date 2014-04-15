@@ -28,7 +28,17 @@ function ncpedia_linkrecs_admin_settings() {
     '#description' => t('The longer the context string, the better understanding editors have of the link
       placement. A longer string could make the page ugly or slow down the page load, however.'),
     '#required' => TRUE,
+  );  
+  $form['ncpedia_linkrecs_search_style'] = array(
+    '#type' => 'select',
+    '#title' => t('Type of database search performed'),
+    '#options' => drupal_map_assoc(array('default','fulltext')),
+    '#default_value' => variable_get('ncpedia_linkrecs_search_style', 'default'),
+    '#description' => t('Default search can use Drupal core tables, but is slow. Fulltext search requires a separate table (see documentation), but is much faster.'),
+    '#required' => TRUE,
   );
+  //
+  
   
   return system_settings_form($form);
 }
