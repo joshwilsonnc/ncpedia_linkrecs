@@ -403,8 +403,9 @@ function ncpedia_linkrecs_check_for_links($nid,$page=0) {
           array(':search' => '+"'.$nt.'"'));
 
     foreach ($result as $row) {
-      //check master list, if not there, add it and proceed
-      if (!in_array($row->nid, $master_list)) {
+      //Skip self-matches.
+      //Check master list, if not there, add it and proceed
+      if (($row->nid !== $nid) && (!in_array($row->nid, $master_list))) {
 
         //The query above merely matched text. However, there are instances when the match
         //is not suitable:
@@ -434,10 +435,9 @@ function ncpedia_linkrecs_check_for_links($nid,$page=0) {
         //We will proceed if unlinked or external        
         $existing_link_check = ncpedia_linkrecs_review_links($nt, $body);
 
-        //Proceed with creating a link and contextual text, skipping:
-        // * the entry itself (same nid)
-        // * articles that already have a matching internal link
-        if (($row->nid !== $nid) && (($existing_link_check == 'unlinked') || ($existing_link_check == 'external'))) {
+        //Proceed with creating a link and contextual text, skipping
+        //articles that already have a matching internal link
+        if (($existing_link_check == 'unlinked') || ($existing_link_check == 'external')) {
 
           $master_list[] = $row->nid;
 
@@ -544,9 +544,6 @@ function ncpedia_linkrecs_review_links($nt, $body) {
   if ($status === '') {
     $status = stripos($body, $nt) !== FALSE ? 'unlinked' : 'not found';
   }
-  dpm('[in link review] ' . $nt);
-  dpm($body);
-  dpm($status);
   
   return $status;
 }
