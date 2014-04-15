@@ -5,12 +5,11 @@ suggested links is generated for the node. Automatically creates links upon user
 approval. Very helpful for the NCpedia project (http://ncpedia.org), perhaps for 
 similar projects as well.</p>
 
-<img src="http://joshwilson.net/img/ncpedia_linkrecs_screenshot.jpg" style="border: 1px solid #808080;padding: 10px;"/>
+<img src="http://joshwilson.net/img/ncpedia_linkrecs_screenshot.jpg" />
 
 <p><strong>Still very much in beta. Back up your database before installing or using.</strong>
-Default Makes use of MySQL LIKE searching, which is very inefficient. Would be better 
-implemented as a Solr or other search, but this does work in Drupal without other
-dependencies at least.</p>
+Default configuration makes use of MySQL LIKE searching, which is very inefficient. Also supports
+MySQL FULLTEXT searching (not fully documented as of April 2014; see TODOs).</p>
 
 <p>To-dos:</p>
 <ul>
