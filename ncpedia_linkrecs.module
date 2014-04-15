@@ -397,10 +397,10 @@ function ncpedia_linkrecs_check_for_links($nid,$page=0) {
     //THIS VERSION uses a full-text indexed table
     //Much faster than above! But requires a pre-built table with FULLTEXT indexing
     //Still not as efficient as an external search (e.g., Solr)
-    $result = db_query("SELECT n.title AS title, n.nid AS nid, lh.body_value AS body_value
+    $result = db_query('SELECT n.title AS title, n.nid AS nid, lh.body_value AS body_value
     FROM {ncpedia_linkrecs_helper} lh INNER JOIN {node} n ON n.nid = lh.entity_id 
-    WHERE MATCH (lh.body_value) AGAINST (:search) ORDER BY title ASC",
-          array(':search' => $nt));
+    WHERE MATCH (lh.body_value) AGAINST (:search IN BOOLEAN MODE) ORDER BY title ASC',
+          array(':search' => '+"'.$nt.'"'));
 
     foreach ($result as $row) {
       //check master list, if not there, add it and proceed
