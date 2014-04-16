@@ -7,19 +7,21 @@
  * Suggests links between pages on your site
  *  
  * GENERAL TODOs
+ * *********comments/documentation
+ * *********testing
  * **error handling http://drupal.org/node/672504
  * **Way to flag as reviewed? Would that even be something you'd want?
  * **body['und'][0]['value'] consistent? I think you can ignore language?
- * **needs to be more generalized: option to match between content types, fields
- * ***improved admin options here
- * **admin options for internal table search vs indexed table search vs external
- * **comments conform to standards
  * **cron script for keeping current in production
- * **install function to create table, add to cron? or at least 
- * **check that anyone using fulltext doesn't get an error
+ * **install function to create table, add to cron? or at minimum
+ * check that anyone using fulltext doesn't get an error
  * **external linking working right?
- * **Robert Hardy Smith example. Is it searching Smith? Should it? Will be a refresher
- * on how the title splitter is working
+ * 
+ * TODOs to generalize code for use on other sites:
+ * *_parse_title options in Admin:
+ * Custom verboten and title_remove lists
+ * custom function or ability to customize which rules are applied
+ * *Definte content types to include/exclude in link checking
  * 
  */
 
@@ -70,5 +72,6 @@ function ncpedia_linkrecs_permission() {
 function ncpedia_linkrecs_uninstall() {
   variable_del('ncpedia_linkrecs_max');
   variable_del('ncpedia_linkrecs_context_length');
+  variable_del('ncpedia_linkrecs_search_style');
 }
 

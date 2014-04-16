@@ -187,93 +187,6 @@ function ncpedia_linkrecs_page_submit($form, &$form_state) {
 }
 
 /**
- * Returns a node's title when given a node id
- * 
- * Lighter-weight over a full node load, since we only need title
- * 
- * @param integer $nid
- * @return string
- */
-function ncpedia_linkrecs_get_title($nid) {
-  $result = db_query('SELECT n.title FROM {node} n WHERE n.nid = :nid', array(':nid' => $nid));
-  $init_title = $result->fetchCol();
-  return $init_title[0];
-}
-
-/**
- * Takes a string as a full title, returns array of possible titles 
- * 
- * @param type $title
- */
-function ncpedia_linkrecs_parse_title($full_title) {
-  
-  //Running list of strings to ignore, keep as a regex
-  $verboten_list = '/north|carolina|tar|heel|junior|historian|research|branch/i';
-
-  //Title strings that should be removed
-  $title_removes_list = array (
-    ' (from Tar Heel Junior Historian)',
-  );
-  $title_replacements_list = array (
-    '',
-  );
-  
-  $title[] = trim(str_replace($title_removes_list, $title_replacements_list, $full_title));
-
-  //Check for cases of node titles being lastname, firstname(s)
-  //if found, rearrange. Keep original in array, though
-  if (substr_count($title[0], ',') > 1) {
-    $variations = preg_split('/,\s*/i', $title[0]);
-    $title[] = $variations[0] . ', ' . $variations[1];
-    $title[] = $variations[1] . ' ' . $variations[0];
-    $title[] = $variations[1] . ' ' . $variations[0] . ', ' . $variations[2];
-  }  
-  elseif (substr_count($title[0], ',') === 1) {
-    $title[] =  ltrim(strstr($title[0], ','), ', ') . ' ' . strstr($title[0], ',', TRUE);
-  }
-  else { 
-    //inferring it's not a name, do a few other small things:
-
-    //de-pluralize - can't reliably do this but at least try a simple -s removal
-    if (preg_match('/s\Z/i', $title[0])) {
-      $title[] = substr($title[0], 0, strlen($title[0])-1);
-    }  
-    //check for multi-part entries, strip "Part:" text if found
-    //no need to bother trying to match "Part:" text, original can be overwritten
-    if (preg_match('/\s-\sPart\s[1-9]:\s/i', $title[0])) {
-      $temp_title = preg_replace('/\s-\sPart\s[1-9]:\s/i', '***', $title[0]);
-      $title = explode('***', $temp_title);    
-    }
-  }
-  //Additionally populate array word clusters up to two words
-  //don't count clusters where all words are 3 chars or less
-  foreach ($title as $t) {
-    $all_the_words = str_word_count($t, 1);
-    for ($i=count($all_the_words)-1; $i>1; $i--) {
-      for ($j=0; $j<=count($all_the_words)-$i; $j++) {
-        $str = '';
-        $no_short_words = TRUE;
-        for ($k=0; $k<$i; $k++) {
-          if (strlen($all_the_words[$j+$k]) <= 3) {
-            $no_short_words = FALSE;
-            break;
-          }
-          else {
-            $str .= $all_the_words[$j+$k] . ' ';          
-          }
-        }
-        //skip anything with short words or common phrases
-        $str = rtrim($str);
-        if (($no_short_words) && (!preg_match($verboten_list, $str)) && (!in_array($str, $title))) { 
-          $title[] = $str;
-        }
-      }
-    }
-  }
-  return $title;  
-}
-
-/**
  * Searches database for title matches
  * 
  * @param integer $nid
@@ -437,6 +350,103 @@ function ncpedia_linkrecs_check_for_links($nid,$page=0) {
   }
 
   return $links;
+}
+
+/**
+ * Returns a node's title when given a node id
+ * 
+ * Lighter-weight over a full node load, since we only need title
+ * 
+ * @param integer $nid
+ * @return string
+ */
+function ncpedia_linkrecs_get_title($nid) {
+  $result = db_query('SELECT n.title FROM {node} n WHERE n.nid = :nid', array(':nid' => $nid));
+  $init_title = $result->fetchCol();
+  return $init_title[0];
+}
+
+/**
+ * Takes a string as a full title, returns array of possible titles 
+ * 
+ * This can't be perfect, but some general rules are applied:
+ * *Strip out or don't count common phrases that won't help with finding unique matches
+ * *Anything in the format [word],[otherword] is assumed to be [a last name],[a first name].
+ * In which case, be sure to search for the name as-is, as well as [first name] [last name]
+ * *If the title has three or more words, try variations that use combinations of the words
+ * But don't bother searching for one word of the three. Probably too vague to be useful.
+ * 
+ * @param type $title
+ */
+function ncpedia_linkrecs_parse_title($full_title) {
+  
+  //Running list of title strings to ignore, keep as a regex
+  //e.g., super-common phrases that will generate far too many matches to be useful
+  $verboten_list = '/north|carolina|tar|heel|junior|historian|research|branch/i';
+
+  //Title strings that should be stripped from the full title
+  //e.g., if you have a suffix on one batch of titles and you wouldn't want them 
+  //to be matched as suggestions
+  $title_removes_list = array (
+    ' (from Tar Heel Junior Historian)',
+  );
+  $title_replacements_list = array (
+    '',
+  );
+  
+  $title[] = trim(str_replace($title_removes_list, $title_replacements_list, $full_title));
+
+  //Check for cases of node titles being lastname, firstname(s)
+  //if found, rearrange and add variations to array. Keep original in array, as well
+  if (substr_count($title[0], ',') > 1) { //true for name suffixes, e.g. Fox, Joe, Jr.
+    $variations = preg_split('/,\s*/i', $title[0]);
+    $title[] = $variations[0] . ', ' . $variations[1];
+    $title[] = $variations[1] . ' ' . $variations[0];
+    $title[] = $variations[1] . ' ' . $variations[0] . ', ' . $variations[2];
+  }  
+  elseif (substr_count($title[0], ',') === 1) {
+    $title[] =  ltrim(strstr($title[0], ','), ', ') . ' ' . strstr($title[0], ',', TRUE);
+  }
+  else { 
+    //inferring it's not a name lastname, firstname; do a few other small things:
+
+    //de-pluralize - can't reliably do this but at least try a simple -s removal
+    if (preg_match('/s\Z/i', $title[0])) {
+      $title[] = substr($title[0], 0, strlen($title[0])-1);
+    }  
+    //check for multi-part entries, strip "Part:" text if found
+    //no need to bother trying to match "Part:" text, original can be overwritten
+    if (preg_match('/\s-\sPart\s[1-9]:\s/i', $title[0])) {
+      $temp_title = preg_replace('/\s-\sPart\s[1-9]:\s/i', '***', $title[0]);
+      $title = explode('***', $temp_title);    
+    }
+  }
+  //Additionally populate array word clusters up to two words
+  //don't count clusters where all words are 3 chars or less
+  foreach ($title as $t) {
+    $all_the_words = str_word_count($t, 1);
+    for ($i=count($all_the_words)-1; $i>1; $i--) {
+      for ($j=0; $j<=count($all_the_words)-$i; $j++) {
+        $str = '';
+        $no_short_words = TRUE;
+        for ($k=0; $k<$i; $k++) {
+          if (strlen($all_the_words[$j+$k]) <= 3) {
+            $no_short_words = FALSE;
+            break;
+          }
+          else {
+            $str .= $all_the_words[$j+$k] . ' ';          
+          }
+        }
+        //skip anything with short words or common phrases
+        $str = rtrim($str);
+        if (($no_short_words) && (!preg_match($verboten_list, $str)) && (!in_array($str, $title))) { 
+          $title[] = $str;
+        }
+      }
+    }
+  }
+  return $title;  
 }
 
 /**
